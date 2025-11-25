@@ -1,14 +1,22 @@
 import { ReactNode, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { Redirect } from 'wouter';
 
 export function MainLayout({ children }: { children: ReactNode }) {
-  const { state } = useApp();
+  const { user, isLoading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  if (!state.currentUser) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-secondary/30 flex items-center justify-center">
+        <div className="animate-pulse text-xl text-primary">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return <Redirect to="/login" />;
   }
 

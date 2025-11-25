@@ -12,7 +12,7 @@ import Reports from "@/pages/Reports";
 import Tasks from "@/pages/Tasks";
 import SettingsPage from "@/pages/Settings";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { AppProvider } from "@/lib/store";
+import { AuthProvider } from "@/lib/auth";
 
 function Router() {
   return (
@@ -47,12 +47,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppProvider>
+      <AuthProvider>
         <TooltipProvider>
           <Router />
           <Toaster />
         </TooltipProvider>
-      </AppProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

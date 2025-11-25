@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'wouter';
 import { 
@@ -12,15 +12,32 @@ import {
   Store
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
 
 export function Sidebar() {
-  const { state, logout } = useApp();
-  const [location] = useLocation();
-  const { currentUser } = state;
+  const { user, logout } = useAuth();
+  const [location, setLocation] = useLocation();
 
-  if (!currentUser) return null;
+  if (!user) return null;
 
-  const role = currentUser.role;
+  const role = user.role;
+  
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logout realizado",
+        description: "Até logo!",
+      });
+      setLocation('/login');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao fazer logout",
+        description: error.message,
+      });
+    }
+  };
 
   const navItems = [
     { 
@@ -98,18 +115,21 @@ export function Sidebar() {
 
       <div className="p-4 border-t border-sidebar-border bg-sidebar/50 backdrop-blur-sm">
         <div className="flex items-center gap-3 mb-4 px-2">
-          <div className="h-9 w-9 rounded-full overflow-hidden ring-2 ring-sidebar-ring/20">
-            <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full object-cover" />
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-500 to-orange-500 flex items-center justify-center ring-2 ring-sidebar-ring/20 text-2xl">
+            {user.avatar || '👤'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">{currentUser.name}</p>
-            <p className="text-xs text-muted-foreground capitalize truncate">{currentUser.role === 'manager' ? 'Gestor' : currentUser.role === 'seller' ? 'Vendedor' : 'Admin'}</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name}</p>
+            <p className="text-xs text-muted-foreground capitalize truncate">
+              {user.role === 'manager' ? 'Gestor' : user.role === 'seller' ? 'Vendedor' : 'Admin'}
+            </p>
           </div>
         </div>
         <Button 
           variant="outline" 
+          data-testid="button-logout"
           className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
-          onClick={logout}
+          onClick={handleLogout}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Sair

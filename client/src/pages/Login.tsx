@@ -1,79 +1,141 @@
-import { useApp } from '@/lib/store';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Store, UserCircle2, UserCog, ShoppingBag } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Store, Lock, User } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 export default function Login() {
-  const { state, login } = useApp();
-  const [selectedUser, setSelectedUser] = useState<string>('');
+  const { user, login, isLoading } = useAuth();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, setLocation] = useLocation();
 
-  const handleLogin = () => {
-    if (selectedUser) {
-      login(selectedUser);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!username || !password) {
+      toast({
+        variant: "destructive",
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha usuário e senha.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await login(username, password);
+      toast({
+        title: "Login realizado!",
+        description: "Bem-vindo ao sistema.",
+      });
       setLocation('/');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao fazer login",
+        description: error.message || "Usuário ou senha incorretos.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // If already logged in, redirect
-  if (state.currentUser) {
+  if (user && !isLoading) {
     setLocation('/');
     return null;
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-500/20 via-orange-500/10 to-emerald-500/20 flex items-center justify-center">
+        <div className="animate-pulse text-xl text-primary">Carregando...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/20 to-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-2xl border-primary/10">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-500/20 via-orange-500/10 to-emerald-500/20 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-2xl border-emerald-200">
         <CardHeader className="text-center space-y-4 pb-8">
-          <div className="mx-auto h-16 w-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 transform rotate-3">
-            <Store className="h-8 w-8 text-primary-foreground" />
+          <div className="mx-auto h-16 w-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30 transform rotate-3">
+            <Store className="h-8 w-8 text-white" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-heading font-bold text-primary">Mercearia Smart</CardTitle>
-            <CardDescription className="text-lg">Sistema de Gestão Inteligente</CardDescription>
+            <CardTitle className="text-3xl font-heading font-bold bg-gradient-to-r from-emerald-600 to-orange-500 bg-clip-text text-transparent">
+              Fresh Market
+            </CardTitle>
+            <CardDescription className="text-lg">Sistema de Vendas Inteligente</CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground pl-1">Selecione seu perfil</label>
-            <Select onValueChange={setSelectedUser} value={selectedUser}>
-              <SelectTrigger className="h-12 text-base bg-muted/30 border-primary/20 focus:ring-primary">
-                <SelectValue placeholder="Quem é você?" />
-              </SelectTrigger>
-              <SelectContent>
-                {state.users.map((user) => (
-                  <SelectItem key={user.id} value={user.id} className="py-3">
-                    <div className="flex items-center gap-3">
-                      {user.role === 'admin' && <UserCog className="h-5 w-5 text-primary" />}
-                      {user.role === 'manager' && <UserCircle2 className="h-5 w-5 text-blue-500" />}
-                      {user.role === 'seller' && <ShoppingBag className="h-5 w-5 text-orange-500" />}
-                      <div className="flex flex-col text-left">
-                        <span className="font-medium">{user.name}</span>
-                        <span className="text-xs text-muted-foreground capitalize">
-                          {user.role === 'manager' ? 'Gestor' : user.role === 'seller' ? 'Vendedor' : 'Administrador'}
-                        </span>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-medium text-muted-foreground">
+                Usuário
+              </Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="username"
+                  data-testid="input-username"
+                  type="text"
+                  placeholder="Digite seu usuário"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="pl-10 h-12 text-base bg-muted/30 border-emerald-200 focus:ring-emerald-500"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
 
-          <Button 
-            className="w-full h-12 text-lg font-medium shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]" 
-            onClick={handleLogin}
-            disabled={!selectedUser}
-          >
-            Entrar no Sistema
-          </Button>
-          
-          <div className="text-center text-xs text-muted-foreground pt-4">
-            &copy; 2025 Mercearia Smart Inc.
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-muted-foreground">
+                Senha
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  data-testid="input-password"
+                  type="password"
+                  placeholder="Digite sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 h-12 text-base bg-muted/30 border-emerald-200 focus:ring-emerald-500"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            <Button 
+              type="submit"
+              data-testid="button-login"
+              className="w-full h-12 text-lg font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Entrando...' : 'Entrar no Sistema'}
+            </Button>
+            
+            <div className="text-center space-y-2 pt-4">
+              <p className="text-xs text-muted-foreground">Credenciais de teste:</p>
+              <div className="text-xs space-y-1 bg-muted/50 p-3 rounded-lg">
+                <p><strong>Admin:</strong> admin / senha123</p>
+                <p><strong>Vendedor:</strong> joao / senha123</p>
+                <p><strong>Gerente:</strong> maria / senha123</p>
+              </div>
+            </div>
+
+            <div className="text-center text-xs text-muted-foreground pt-2">
+              &copy; 2025 Fresh Market Sistema Inteligente
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

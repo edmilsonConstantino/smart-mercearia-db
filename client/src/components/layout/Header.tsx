@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { Bell, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { notificationsApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -18,16 +20,30 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const { state, dispatch } = useApp();
-  const { notifications, currentUser } = state;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: notificationsApi.getAll,
+    enabled: !!user,
+    refetchInterval: 10000 // Refetch every 10 seconds for real-time feel
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: notificationsApi.markAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  });
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleMarkRead = (id: string) => {
-    dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id });
+    markAsReadMutation.mutate(id);
   };
 
-  if (!currentUser) return null;
+  if (!user) return null;
 
   return (
     <header className="h-16 bg-background/80 backdrop-blur-md border-b border-border sticky top-0 z-10 px-4 flex items-center justify-between md:justify-end gap-4">
@@ -36,7 +52,6 @@ export function Header({ onMenuClick }: HeaderProps) {
       </Button>
 
       <div className="hidden md:flex items-center max-w-md w-full mr-auto">
-        {/* Global Search Placeholder - functional in future */}
         <div className="relative w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -50,10 +65,10 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
               <Bell className="h-5 w-5 text-muted-foreground" />
               {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full animate-pulse" />
+                <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full animate-pulse" data-testid="badge-unread" />
               )}
             </Button>
           </DropdownMenuTrigger>
@@ -68,6 +83,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 notifications.map((notif) => (
                   <div 
                     key={notif.id} 
+                    data-testid={`notification-${notif.id}`}
                     className={`p-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notif.read ? 'bg-accent/5' : ''}`}
                     onClick={() => handleMarkRead(notif.id)}
                   >
@@ -82,7 +98,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                           {notif.message}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(notif.timestamp, { addSuffix: true, locale: ptBR })}
+                          {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ptBR })}
                         </p>
                       </div>
                     </div>
