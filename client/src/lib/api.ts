@@ -118,7 +118,7 @@ export const usersApi = {
     return res.json();
   },
 
-  create: async (data: Omit<User, 'id'>): Promise<User> => {
+  create: async (data: Omit<User, 'id' | 'avatar'> & { password: string }): Promise<User> => {
     const res = await fetch(`${API_BASE}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

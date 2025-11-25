@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -11,30 +11,44 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useQuery } from '@tanstack/react-query';
+import { salesApi, productsApi, categoriesApi } from '@/lib/api';
 
 export default function Reports() {
-  const { state } = useApp();
-  const { sales, categories, products } = state;
+  const { user } = useAuth();
   const [date, setDate] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
   });
 
-  // Filter sales by date range
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['/api/sales'],
+    queryFn: salesApi.getAll
+  });
+
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    queryFn: productsApi.getAll
+  });
+
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ['/api/categories'],
+    queryFn: categoriesApi.getAll
+  });
+
   const filteredSales = sales.filter(s => {
     if (!date?.from) return true;
-    const saleDate = new Date(s.timestamp);
+    const saleDate = new Date(s.createdAt);
     const toDate = date.to || date.from;
     return saleDate >= date.from && saleDate <= toDate;
   });
 
-  // Aggregate sales by date
   const salesByDate = filteredSales.reduce((acc, sale) => {
-    const dateStr = format(new Date(sale.timestamp), 'dd/MM', { locale: ptBR });
+    const dateStr = format(new Date(sale.createdAt), 'dd/MM', { locale: ptBR });
     if (!acc[dateStr]) {
       acc[dateStr] = 0;
     }
-    acc[dateStr] += sale.total;
+    acc[dateStr] += parseFloat(sale.total);
     return acc;
   }, {} as Record<string, number>);
 
@@ -42,11 +56,9 @@ export default function Reports() {
     date,
     total
   })).sort((a, b) => {
-    // Simplified sort assuming simple dd/MM format within same year for prototype
     return 0; 
   });
 
-  // Aggregate sales by category
   const salesByCategory = filteredSales.reduce((acc, sale) => {
     sale.items.forEach(item => {
       const product = products.find(p => p.id === item.productId);
@@ -65,8 +77,21 @@ export default function Reports() {
     value
   }));
 
-  const totalRevenue = filteredSales.reduce((acc, curr) => acc + curr.total, 0);
+  const totalRevenue = filteredSales.reduce((acc, curr) => acc + parseFloat(curr.total), 0);
   const averageTicket = filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0;
+
+  const isLoading = salesLoading || productsLoading || categoriesLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Carregando relatórios...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -85,6 +110,7 @@ export default function Reports() {
                   "w-[300px] justify-start text-left font-normal",
                   !date && "text-muted-foreground"
                 )}
+                data-testid="button-date-range"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {date?.from ? (
@@ -121,7 +147,7 @@ export default function Reports() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Receita Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">{formatCurrency(totalRevenue)}</div>
+            <div className="text-2xl font-bold text-primary" data-testid="text-total-revenue">{formatCurrency(totalRevenue)}</div>
             <p className="text-xs text-muted-foreground">No período selecionado</p>
           </CardContent>
         </Card>
@@ -130,7 +156,7 @@ export default function Reports() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Vendas Realizadas</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{filteredSales.length}</div>
+            <div className="text-2xl font-bold" data-testid="text-total-sales">{filteredSales.length}</div>
             <p className="text-xs text-muted-foreground">Transações</p>
           </CardContent>
         </Card>
@@ -139,7 +165,7 @@ export default function Reports() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Médio</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(averageTicket)}</div>
+            <div className="text-2xl font-bold" data-testid="text-avg-ticket">{formatCurrency(averageTicket)}</div>
             <p className="text-xs text-muted-foreground">Por venda</p>
           </CardContent>
         </Card>

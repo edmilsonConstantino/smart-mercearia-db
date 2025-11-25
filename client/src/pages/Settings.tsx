@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,37 +17,123 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Shield, UserPlus, Lock, Activity, History, Search, Eye, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
-import { Role, User } from '@/lib/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usersApi, auditLogsApi, salesApi, productsApi } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
 
 export default function SettingsPage() {
-  const { state } = useApp();
-  const { users, sales, products } = state;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("users");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [searchHistory, setSearchHistory] = useState('');
 
-  // Mock Permissions Data (In a real app, this would be in global state)
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['/api/users'],
+    queryFn: usersApi.getAll
+  });
+
+  const { data: auditLogs = [], isLoading: auditLogsLoading } = useQuery({
+    queryKey: ['/api/audit-logs'],
+    queryFn: auditLogsApi.getAll
+  });
+
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['/api/sales'],
+    queryFn: salesApi.getAll
+  });
+
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    queryFn: productsApi.getAll
+  });
+
+  const [newUser, setNewUser] = useState({
+    username: '',
+    name: '',
+    password: '',
+    role: 'seller' as 'admin' | 'manager' | 'seller'
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: usersApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setIsAddUserOpen(false);
+      setNewUser({ username: '', name: '', password: '', role: 'seller' });
+      toast({ title: "Sucesso", description: "Usuário criado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
   const [permissions, setPermissions] = useState({
     admin: { canEditProducts: true, canViewReports: true, canManageUsers: true, canSell: true, canDiscount: true },
     manager: { canEditProducts: true, canViewReports: true, canManageUsers: false, canSell: true, canDiscount: true },
     seller: { canEditProducts: false, canViewReports: false, canManageUsers: false, canSell: true, canDiscount: false },
   });
 
-  const handlePermissionChange = (role: Role, key: string, value: boolean) => {
+  const handlePermissionChange = (role: 'admin' | 'manager' | 'seller', key: string, value: boolean) => {
     setPermissions({
       ...permissions,
       [role]: { ...permissions[role as keyof typeof permissions], [key]: value }
     });
   };
 
-  // Filtered Sales History for Audit Trail
-  const filteredHistory = sales.filter(s => 
-    s.id.toLowerCase().includes(searchHistory.toLowerCase()) || 
-    s.userId.toLowerCase().includes(searchHistory.toLowerCase())
+  const filteredAuditLogs = auditLogs.filter(log => 
+    log.action.toLowerCase().includes(searchHistory.toLowerCase()) ||
+    log.userId.toLowerCase().includes(searchHistory.toLowerCase()) ||
+    (log.entityId && log.entityId.toLowerCase().includes(searchHistory.toLowerCase()))
   );
+
+  const handleSaveUser = () => {
+    if (!newUser.username || !newUser.name || !newUser.password) {
+      toast({ 
+        title: "Erro", 
+        description: "Todos os campos são obrigatórios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (user?.role !== 'admin') {
+      toast({ 
+        title: "Acesso negado", 
+        description: "Apenas administradores podem criar usuários",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    createUserMutation.mutate({
+      username: newUser.username,
+      name: newUser.name,
+      password: newUser.password,
+      role: newUser.role
+    });
+  };
+
+  const isLoading = usersLoading || auditLogsLoading || salesLoading || productsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Carregando configurações...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -60,17 +146,16 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="users" className="gap-2"><UserPlus className="h-4 w-4" /> Usuários</TabsTrigger>
-          <TabsTrigger value="permissions" className="gap-2"><Shield className="h-4 w-4" /> Permissões</TabsTrigger>
-          <TabsTrigger value="audit" className="gap-2"><History className="h-4 w-4" /> Rastreio & Auditoria</TabsTrigger>
+          <TabsTrigger value="users" className="gap-2" data-testid="tab-users"><UserPlus className="h-4 w-4" /> Usuários</TabsTrigger>
+          <TabsTrigger value="permissions" className="gap-2" data-testid="tab-permissions"><Shield className="h-4 w-4" /> Permissões</TabsTrigger>
+          <TabsTrigger value="audit" className="gap-2" data-testid="tab-audit"><History className="h-4 w-4" /> Rastreio & Auditoria</TabsTrigger>
         </TabsList>
 
-        {/* USERS MANAGEMENT */}
         <TabsContent value="users" className="space-y-4">
           <div className="flex justify-end">
              <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
               <DialogTrigger asChild>
-                <Button className="shadow-lg shadow-primary/20">
+                <Button className="shadow-lg shadow-primary/20" disabled={user?.role !== 'admin'} data-testid="button-add-user">
                   <UserPlus className="mr-2 h-4 w-4" />
                   Novo Usuário
                 </Button>
@@ -83,12 +168,36 @@ export default function SettingsPage() {
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label>Nome Completo</Label>
-                    <Input placeholder="Ex: João Silva" />
+                    <Input 
+                      placeholder="Ex: João Silva" 
+                      value={newUser.name}
+                      onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                      data-testid="input-user-name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Nome de Usuário</Label>
+                    <Input 
+                      placeholder="Ex: joao.silva" 
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                      data-testid="input-username"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Senha</Label>
+                    <Input 
+                      type="password" 
+                      placeholder="Senha inicial" 
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                      data-testid="input-password"
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Função (Grupo)</Label>
-                    <Select>
-                      <SelectTrigger>
+                    <Select value={newUser.role} onValueChange={(val: any) => setNewUser({...newUser, role: val})}>
+                      <SelectTrigger data-testid="select-user-role">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -100,7 +209,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button onClick={() => setIsAddUserOpen(false)}>Salvar</Button>
+                  <Button onClick={handleSaveUser} disabled={createUserMutation.isPending} data-testid="button-save-user">
+                    {createUserMutation.isPending ? 'Salvando...' : 'Salvar'}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -115,23 +226,29 @@ export default function SettingsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
+                    <TableHead>Usuário</TableHead>
                     <TableHead>Grupo</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
+                  {users.map((u) => (
+                    <TableRow key={u.id} data-testid={`row-user-${u.id}`}>
                       <TableCell className="font-medium flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted overflow-hidden">
-                          <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+                        <div className="h-8 w-8 rounded-full bg-muted overflow-hidden flex items-center justify-center text-sm font-bold">
+                          {u.avatar ? (
+                            <img src={u.avatar} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            u.name.charAt(0).toUpperCase()
+                          )}
                         </div>
-                        {user.name}
+                        {u.name}
                       </TableCell>
+                      <TableCell className="text-muted-foreground">{u.username}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
-                          {user.role === 'manager' ? 'Gestor' : user.role === 'seller' ? 'Vendedor' : 'Admin'}
+                          {u.role === 'manager' ? 'Gestor' : u.role === 'seller' ? 'Vendedor' : 'Admin'}
                         </Badge>
                       </TableCell>
                       <TableCell><Badge variant="secondary" className="bg-green-100 text-green-800">Ativo</Badge></TableCell>
@@ -146,7 +263,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* PERMISSIONS MANAGEMENT */}
         <TabsContent value="permissions" className="space-y-4">
           <Card>
             <CardHeader>
@@ -193,16 +309,16 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* AUDIT TRAIL */}
         <TabsContent value="audit" className="space-y-4">
           <div className="flex items-center gap-4 mb-4">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Buscar transação, usuário ou produto..." 
+                placeholder="Buscar ação, usuário ou entidade..." 
                 className="pl-9" 
                 value={searchHistory}
                 onChange={(e) => setSearchHistory(e.target.value)}
+                data-testid="input-search-audit"
               />
             </div>
           </div>
@@ -218,102 +334,34 @@ export default function SettingsPage() {
                     <TableHead>Data/Hora</TableHead>
                     <TableHead>Usuário</TableHead>
                     <TableHead>Ação</TableHead>
-                    <TableHead>Detalhes (Rastreio Dinâmico)</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    <TableHead>Entidade</TableHead>
+                    <TableHead>Detalhes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHistory.map((sale) => {
-                    const user = users.find(u => u.id === sale.userId);
+                  {filteredAuditLogs.map((log) => {
+                    const logUser = users.find(u => u.id === log.userId);
                     return (
-                      <TableRow key={sale.id}>
+                      <TableRow key={log.id} data-testid={`row-audit-${log.id}`}>
                         <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(sale.timestamp), "dd/MM/yy HH:mm", { locale: ptBR })}
+                          {format(new Date(log.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}
                         </TableCell>
-                        <TableCell className="font-medium">{user?.name || 'Desconhecido'}</TableCell>
+                        <TableCell className="font-medium">{logUser?.name || 'Sistema'}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Venda Realizada</Badge>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            {log.action}
+                          </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="text-xs space-y-1">
-                            {sale.items.map((item, idx) => {
-                              const product = products.find(p => p.id === item.productId);
-                              return (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <span className="font-mono bg-muted px-1 rounded">
-                                    {product?.sku}
-                                  </span>
-                                  <span>{product?.name}</span>
-                                  <span className="text-muted-foreground">
-                                    ({item.quantity}{product?.unit} saindo)
-                                  </span>
-                                </div>
-                              );
-                            })}
-                            <div className="text-muted-foreground pt-1 border-t border-border mt-1">
-                              Pagamento via <span className="uppercase font-bold">{sale.paymentMethod}</span>
-                            </div>
+                          <span className="text-xs font-mono">{log.entityType}</span>
+                          {log.entityId && (
+                            <span className="text-xs text-muted-foreground ml-1">#{log.entityId.slice(-6)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs text-muted-foreground max-w-md truncate">
+                            {log.details ? JSON.stringify(log.details) : '-'}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {formatCurrency(sale.total)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                           <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Detalhes da Transação #{sale.id}</DialogTitle>
-                                <DialogDescription>Rastreio completo do movimento de estoque</DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="bg-muted/30 p-4 rounded-lg border border-border">
-                                  <h4 className="font-bold mb-2 text-sm">Movimentação de Estoque</h4>
-                                  <div className="space-y-2">
-                                    {sale.items.map((item, idx) => {
-                                      const product = products.find(p => p.id === item.productId);
-                                      // Simulation of "stock before" just for UI (in real app we'd need historical snapshots)
-                                      const stockNow = product?.stock || 0;
-                                      const stockBefore = stockNow + item.quantity; 
-                                      
-                                      return (
-                                        <div key={idx} className="flex justify-between items-center text-sm border-b border-border pb-2 last:border-0 last:pb-0">
-                                          <div>
-                                            <p className="font-medium">{product?.name}</p>
-                                            <p className="text-xs text-muted-foreground">SKU: {product?.sku}</p>
-                                          </div>
-                                          <div className="text-right">
-                                            <div className="flex items-center gap-2 justify-end">
-                                              <span className="text-muted-foreground">{stockBefore}{product?.unit}</span>
-                                              <span className="text-destructive font-bold">-{item.quantity}{product?.unit}</span>
-                                              <span className="font-bold text-primary">→ {stockNow}{product?.unit}</span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                              Valor unitário na venda: {formatCurrency(item.priceAtSale)}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                    <p className="text-xs text-blue-600 uppercase font-bold">Método Pagamento</p>
-                                    <p className="text-lg font-bold text-blue-900 capitalize">{sale.paymentMethod}</p>
-                                  </div>
-                                  <div className="bg-green-50 p-3 rounded border border-green-100">
-                                    <p className="text-xs text-green-600 uppercase font-bold">Total Recebido</p>
-                                    <p className="text-lg font-bold text-green-900">{formatCurrency(sale.total)}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
                         </TableCell>
                       </TableRow>
                     );
@@ -327,4 +375,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-import { Badge } from '@/components/ui/badge';

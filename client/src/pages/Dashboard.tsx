@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -18,37 +18,68 @@ import { formatCurrency } from '@/lib/utils';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { salesApi, productsApi, usersApi, notificationsApi } from '@/lib/api';
 
 export default function Dashboard() {
-  const { state } = useApp();
-  const { sales, products, notifications, users } = state;
+  const { user } = useAuth();
 
-  // Metrics
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['/api/sales'],
+    queryFn: salesApi.getAll
+  });
+
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    queryFn: productsApi.getAll
+  });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['/api/users'],
+    queryFn: usersApi.getAll
+  });
+
+  const { data: notifications = [], isLoading: notificationsLoading } = useQuery({
+    queryKey: ['/api/notifications'],
+    queryFn: notificationsApi.getAll
+  });
+
   const totalSalesToday = sales
-    .filter(s => new Date(s.timestamp).toDateString() === new Date().toDateString())
-    .reduce((acc, curr) => acc + curr.total, 0);
+    .filter(s => new Date(s.createdAt).toDateString() === new Date().toDateString())
+    .reduce((acc, curr) => acc + parseFloat(curr.total), 0);
 
   const totalOrdersToday = sales
-    .filter(s => new Date(s.timestamp).toDateString() === new Date().toDateString())
+    .filter(s => new Date(s.createdAt).toDateString() === new Date().toDateString())
     .length;
 
-  const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
-  const activeUsers = users.length; // Mock active
+  const lowStockCount = products.filter(p => parseFloat(p.stock) <= parseFloat(p.minStock)).length;
+  const activeUsers = users.length;
 
-  // Chart Data (Last 7 days)
   const chartData = Array.from({ length: 7 }).map((_, i) => {
     const date = subDays(new Date(), 6 - i);
     const dateStr = format(date, 'dd/MM', { locale: ptBR });
     const daySales = sales
-      .filter(s => new Date(s.timestamp).toDateString() === date.toDateString())
-      .reduce((acc, curr) => acc + curr.total, 0);
+      .filter(s => new Date(s.createdAt).toDateString() === date.toDateString())
+      .reduce((acc, curr) => acc + parseFloat(curr.total), 0);
     
-    return { date: dateStr, total: daySales, orders: Math.floor(daySales / 20) }; // Mock orders count derived
+    return { date: dateStr, total: daySales, orders: sales.filter(s => new Date(s.createdAt).toDateString() === date.toDateString()).length };
   });
+
+  const isLoading = salesLoading || productsLoading || usersLoading || notificationsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Carregando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Hero Section */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary/90 to-primary/70 p-8 md:p-12 text-primary-foreground shadow-2xl shadow-primary/20">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-40 w-40 rounded-full bg-black/10 blur-2xl"></div>
@@ -56,7 +87,7 @@ export default function Dashboard() {
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2">
             <h1 className="text-4xl font-heading font-bold tracking-tight">
-              Bem-vindo, {state.currentUser?.name.split(' ')[0]}! 👋
+              Bem-vindo, {user?.name.split(' ')[0]}! 👋
             </h1>
             <p className="text-primary-foreground/80 text-lg max-w-xl">
               Aqui está o resumo das atividades da sua mercearia hoje. 
@@ -80,7 +111,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid - Modern Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50 hover:scale-[1.02] transition-transform duration-300 group">
           <div className="absolute right-0 top-0 h-24 w-24 bg-green-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-green-500/20"></div>
@@ -91,7 +121,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800">{formatCurrency(totalSalesToday)}</div>
+            <div className="text-3xl font-bold text-gray-800" data-testid="text-sales-today">{formatCurrency(totalSalesToday)}</div>
             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <span className="text-green-500 font-bold flex items-center bg-green-100 px-1.5 py-0.5 rounded-md">
                 <TrendingUp className="h-3 w-3 mr-1" /> +12.5%
@@ -110,7 +140,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800">{totalOrdersToday}</div>
+            <div className="text-3xl font-bold text-gray-800" data-testid="text-orders-today">{totalOrdersToday}</div>
             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <span className="text-blue-500 font-bold flex items-center bg-blue-100 px-1.5 py-0.5 rounded-md">
                 +{Math.floor(Math.random() * 5)}
@@ -129,7 +159,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className={`text-3xl font-bold ${lowStockCount > 0 ? 'text-destructive' : 'text-gray-800'}`}>{lowStockCount}</div>
+            <div className={`text-3xl font-bold ${lowStockCount > 0 ? 'text-destructive' : 'text-gray-800'}`} data-testid="text-low-stock">{lowStockCount}</div>
             <p className="text-xs text-muted-foreground mt-2">
               {lowStockCount > 0 ? 'Produtos abaixo do mínimo' : 'Estoque saudável'}
             </p>
@@ -145,7 +175,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800">{activeUsers}</div>
+            <div className="text-3xl font-bold text-gray-800" data-testid="text-active-users">{activeUsers}</div>
             <p className="text-xs text-muted-foreground mt-2">
               Usuários cadastrados
             </p>
@@ -153,9 +183,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Main Content Split - Asymmetric Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Chart Section - Glassmorphic Card */}
         <Card className="lg:col-span-2 border-none shadow-xl bg-white/80 backdrop-blur-sm">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -220,7 +248,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent Activity Feed */}
         <div className="space-y-6">
           <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm h-full flex flex-col">
             <CardHeader>
@@ -242,7 +269,7 @@ export default function Dashboard() {
                     <div className="space-y-1 bg-gray-50/50 p-3 rounded-lg flex-1 transition-colors group-hover:bg-gray-100">
                       <p className="text-sm font-medium leading-snug text-gray-800">{notif.message}</p>
                       <p className="text-xs text-muted-foreground font-mono">
-                        {format(new Date(notif.timestamp), "HH:mm", { locale: ptBR })}
+                        {format(new Date(notif.createdAt), "HH:mm", { locale: ptBR })}
                       </p>
                     </div>
                   </div>
@@ -254,7 +281,7 @@ export default function Dashboard() {
                     <div className="space-y-1 bg-gray-50/50 p-3 rounded-lg flex-1 transition-colors group-hover:bg-gray-100">
                       <div className="flex justify-between items-start">
                         <p className="text-sm font-medium text-gray-800">Venda #{sale.id.slice(-4)}</p>
-                        <span className="text-xs font-bold text-primary bg-primary/10 px-1.5 rounded">{formatCurrency(sale.total)}</span>
+                        <span className="text-xs font-bold text-primary bg-primary/10 px-1.5 rounded">{formatCurrency(parseFloat(sale.total))}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {sale.items.length} itens • {sale.paymentMethod === 'card' ? 'Cartão' : 'Dinheiro'}

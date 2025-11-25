@@ -1,4 +1,5 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
+import { useCart } from '@/lib/cart';
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,11 +10,47 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { Product } from '@/lib/types';
+import { Product, productsApi, categoriesApi, salesApi } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
 
 export default function POS() {
-  const { state, addToCart, removeFromCart, dispatch, checkout } = useApp();
-  const { products, categories, cart, currentUser } = state;
+  const { user } = useAuth();
+  const { cart, addToCart, removeFromCart, updateCartQuantity, clearCart, getCartTotal } = useCart();
+  const queryClient = useQueryClient();
+  
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    queryFn: productsApi.getAll
+  });
+
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ['/api/categories'],
+    queryFn: categoriesApi.getAll
+  });
+
+  const createSaleMutation = useMutation({
+    mutationFn: salesApi.create,
+    onSuccess: () => {
+      clearCart();
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales'] });
+      toast({ 
+        title: "Sucesso", 
+        description: "Venda registrada com sucesso!" 
+      });
+      setCheckoutOpen(false);
+      setActiveDiscount({ type: 'none', value: 0 });
+      setAmountReceived(0);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
@@ -25,12 +62,10 @@ export default function POS() {
   
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
-  const [activeDiscount, setActiveDiscount] = useState({ type: 'none', value: 0 }); // applied discount
+  const [activeDiscount, setActiveDiscount] = useState({ type: 'none', value: 0 });
 
-  // Permission check (mock)
-  const canApplyDiscount = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const canApplyDiscount = user?.role === 'admin' || user?.role === 'manager';
 
-  // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
@@ -39,7 +74,6 @@ export default function POS() {
     });
   }, [products, search, selectedCategory]);
 
-  // Cart calculations
   const subtotal = cart.reduce((acc, item) => acc + (item.priceAtSale * item.quantity), 0);
   
   let discountAmount = 0;
@@ -54,14 +88,13 @@ export default function POS() {
   const cartTotal = Math.max(0, subtotal - discountAmount);
   const change = Math.max(0, amountReceived - cartTotal);
 
-  const cartCount = cart.reduce((acc, item) => acc + 1, 0); // Count unique items lines
+  const cartCount = cart.reduce((acc, item) => acc + 1, 0);
 
   const handleApplyDiscount = () => {
     setActiveDiscount({ type: discountType, value: discountValue });
     setDiscountOpen(false);
   };
   
-  // Reset amount received when modal opens
   const openCheckout = () => {
      setAmountReceived(0);
      setCheckoutOpen(true);
@@ -73,11 +106,6 @@ export default function POS() {
     
     const product = products.find(p => p.id === productId);
     if (!product) return;
-
-    // Logic for KG items: if change is small (+-1), maybe we want to open modal? 
-    // For now, keep simple +/- 1 if not 'kg', but if 'kg', maybe adjust by 0.1?
-    // Let's stick to simple increment for 'un', but for 'kg' use 0.1 steps or just rely on the modal.
-    // Actually user asked for grams input.
     
     let step = 1;
     if (product.unit === 'kg') step = 0.1;
@@ -87,17 +115,13 @@ export default function POS() {
     if (newQuantity <= 0) {
       removeFromCart(productId);
     } else {
-      // Check stock limit for addition
       if (change > 0) {
-        if (product.stock < newQuantity) {
-           // Stock limit reached
+        const parsedStock = parseFloat(product.stock);
+        if (parsedStock < newQuantity) {
            return;
         }
       }
-      dispatch({ 
-        type: 'UPDATE_CART_QUANTITY', 
-        payload: { productId, quantity: newQuantity } 
-      });
+      updateCartQuantity(productId, newQuantity);
     }
   };
 
@@ -107,33 +131,74 @@ export default function POS() {
       setWeightInGrams(0);
       setWeightOpen(true);
     } else {
-      addToCart(product, 1);
+      try {
+        addToCart(product, 1);
+        toast({ 
+          title: "Adicionado", 
+          description: `${product.name} adicionado ao carrinho` 
+        });
+      } catch (error: any) {
+        toast({ 
+          title: "Erro", 
+          description: error.message,
+          variant: "destructive"
+        });
+      }
     }
   };
 
   const confirmWeightAdd = () => {
     if (selectedWeightProduct && weightInGrams > 0) {
       const quantityInKg = weightInGrams / 1000;
-      addToCart(selectedWeightProduct, quantityInKg);
-      setWeightOpen(false);
-      setSelectedWeightProduct(null);
-      setWeightInGrams(0);
+      try {
+        addToCart(selectedWeightProduct, quantityInKg);
+        toast({ 
+          title: "Adicionado", 
+          description: `${selectedWeightProduct.name} (${weightInGrams}g) adicionado ao carrinho` 
+        });
+        setWeightOpen(false);
+        setSelectedWeightProduct(null);
+        setWeightInGrams(0);
+      } catch (error: any) {
+        toast({ 
+          title: "Erro", 
+          description: error.message,
+          variant: "destructive"
+        });
+      }
     }
   };
 
   const handleCheckout = (method: 'cash' | 'card' | 'pix' | 'mpesa' | 'emola' | 'pos' | 'bank') => {
-    if (method === 'cash' && amountReceived < cartTotal && amountReceived > 0) {
-       // Could alert here "Valor insuficiente" but for prototype we just proceed or assume exact
-    }
-    checkout(method as any, amountReceived, change); // Type casting for new methods
-    setCheckoutOpen(false);
-    setActiveDiscount({ type: 'none', value: 0 });
-    setAmountReceived(0);
+    if (cart.length === 0 || !user) return;
+
+    createSaleMutation.mutate({
+      userId: user.id,
+      total: cartTotal.toString(),
+      amountReceived: amountReceived > 0 ? amountReceived.toString() : undefined,
+      change: change > 0 ? change.toString() : undefined,
+      paymentMethod: method,
+      items: cart.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        priceAtSale: item.priceAtSale
+      }))
+    });
   };
+
+  if (productsLoading || categoriesLoading) {
+    return (
+      <div className="h-[calc(100vh-8rem)] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Carregando produtos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
-      {/* Left Side: Product Grid */}
       <div className="flex-1 flex flex-col min-w-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="p-4 border-b border-border space-y-4">
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -141,6 +206,7 @@ export default function POS() {
               variant={selectedCategory === 'all' ? "default" : "outline"} 
               className="rounded-full text-xs h-8"
               onClick={() => setSelectedCategory('all')}
+              data-testid="button-category-all"
             >
               Todos
             </Button>
@@ -150,6 +216,7 @@ export default function POS() {
                 variant={selectedCategory === cat.id ? "default" : "outline"}
                 className={`rounded-full text-xs h-8 ${selectedCategory === cat.id ? cat.color : ''}`}
                 onClick={() => setSelectedCategory(cat.id)}
+                data-testid={`button-category-${cat.id}`}
               >
                 {cat.name}
               </Button>
@@ -162,68 +229,75 @@ export default function POS() {
               className="pl-9 bg-muted/30"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-search-products"
             />
           </div>
         </div>
 
         <ScrollArea className="flex-1 p-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredProducts.map(product => (
-              <Card 
-                key={product.id} 
-                className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/50 group ${product.stock <= 0 ? 'opacity-60 pointer-events-none' : ''}`}
-                onClick={() => product.stock > 0 && handleAddProduct(product)}
-              >
-                <CardContent className="p-3 space-y-2">
-                  <div className="aspect-square rounded-lg bg-muted/50 relative overflow-hidden">
-                    {product.image ? (
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                        <ShoppingBag className="h-8 w-8 opacity-20" />
-                      </div>
-                    )}
-                    {product.stock <= product.minStock && product.stock > 0 && (
-                      <Badge variant="destructive" className="absolute top-2 right-2 text-[10px] px-1.5 h-5">
-                        Pouco Estoque
-                      </Badge>
-                    )}
-                    {product.stock <= 0 && (
-                      <div className="absolute inset-0 bg-background/80 flex items-center justify-center font-bold text-destructive text-sm">
-                        ESGOTADO
-                      </div>
-                    )}
-                    {product.unit === 'kg' && (
-                      <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] bg-white/90 backdrop-blur text-foreground border-none shadow-sm">
-                        <Scale className="h-3 w-3 mr-1" /> Pesável
-                      </Badge>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-sm leading-tight line-clamp-2 h-10">{product.name}</h3>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="font-bold text-primary">{formatCurrency(product.price)}</span>
-                      <span className="text-xs text-muted-foreground">/{product.unit}</span>
+            {filteredProducts.map(product => {
+              const parsedStock = parseFloat(product.stock);
+              const parsedMinStock = parseFloat(product.minStock);
+              const parsedPrice = parseFloat(product.price);
+
+              return (
+                <Card 
+                  key={product.id} 
+                  className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/50 group ${parsedStock <= 0 ? 'opacity-60 pointer-events-none' : ''}`}
+                  onClick={() => parsedStock > 0 && handleAddProduct(product)}
+                  data-testid={`card-product-${product.id}`}
+                >
+                  <CardContent className="p-3 space-y-2">
+                    <div className="aspect-square rounded-lg bg-muted/50 relative overflow-hidden">
+                      {product.image ? (
+                        <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <ShoppingBag className="h-8 w-8 opacity-20" />
+                        </div>
+                      )}
+                      {parsedStock <= parsedMinStock && parsedStock > 0 && (
+                        <Badge variant="destructive" className="absolute top-2 right-2 text-[10px] px-1.5 h-5">
+                          Pouco Estoque
+                        </Badge>
+                      )}
+                      {parsedStock <= 0 && (
+                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center font-bold text-destructive text-sm">
+                          ESGOTADO
+                        </div>
+                      )}
+                      {product.unit === 'kg' && (
+                        <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] bg-white/90 backdrop-blur text-foreground border-none shadow-sm">
+                          <Scale className="h-3 w-3 mr-1" /> Pesável
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Estoque: {product.stock.toFixed(product.unit === 'kg' ? 3 : 0)} {product.unit}
+                    <div>
+                      <h3 className="font-medium text-sm leading-tight line-clamp-2 h-10">{product.name}</h3>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="font-bold text-primary">{formatCurrency(parsedPrice)}</span>
+                        <span className="text-xs text-muted-foreground">/{product.unit}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Estoque: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)} {product.unit}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </ScrollArea>
       </div>
 
-      {/* Right Side: Cart */}
       <div className="w-full lg:w-[400px] bg-card rounded-xl border border-border shadow-xl flex flex-col h-full">
         <div className="p-4 border-b border-border bg-primary/5">
           <h2 className="font-heading font-bold text-lg flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-primary" />
             Carrinho Atual
           </h2>
-          <p className="text-sm text-muted-foreground">{cartCount} itens adicionados</p>
+          <p className="text-sm text-muted-foreground" data-testid="text-cart-count">{cartCount} itens adicionados</p>
         </div>
 
         <ScrollArea className="flex-1 p-4">
@@ -238,7 +312,7 @@ export default function POS() {
                 const product = products.find(p => p.id === item.productId);
                 if (!product) return null;
                 return (
-                  <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg border border-transparent hover:border-border transition-colors">
+                  <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg border border-transparent hover:border-border transition-colors" data-testid={`cart-item-${item.productId}`}>
                     <div className="h-12 w-12 rounded-md bg-white overflow-hidden shrink-0">
                        {product.image && <img src={product.image} alt="" className="h-full w-full object-cover" />}
                     </div>
@@ -254,6 +328,7 @@ export default function POS() {
                         <button 
                           className="px-2 hover:bg-muted h-full flex items-center"
                           onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, -1); }}
+                          data-testid={`button-decrease-${item.productId}`}
                         >
                           <Minus className="h-3 w-3" />
                         </button>
@@ -261,6 +336,7 @@ export default function POS() {
                         <button 
                           className="px-2 hover:bg-muted h-full flex items-center"
                           onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
+                          data-testid={`button-increase-${item.productId}`}
                         >
                           <Plus className="h-3 w-3" />
                         </button>
@@ -277,7 +353,7 @@ export default function POS() {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm items-center">
               <span className="text-muted-foreground flex items-center gap-2">
@@ -285,7 +361,7 @@ export default function POS() {
                 {canApplyDiscount && cart.length > 0 && (
                   <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-5 w-5 text-primary">
+                      <Button variant="ghost" size="icon" className="h-5 w-5 text-primary" data-testid="button-open-discount">
                         <Plus className="h-3 w-3" />
                       </Button>
                     </DialogTrigger>
@@ -300,6 +376,7 @@ export default function POS() {
                             variant={discountType === 'percentage' ? 'default' : 'outline'} 
                             className="flex-1"
                             onClick={() => setDiscountType('percentage')}
+                            data-testid="button-discount-percentage"
                           >
                             <Percent className="h-4 w-4 mr-2" /> % Porcentagem
                           </Button>
@@ -307,6 +384,7 @@ export default function POS() {
                             variant={discountType === 'fixed' ? 'default' : 'outline'} 
                             className="flex-1"
                             onClick={() => setDiscountType('fixed')}
+                            data-testid="button-discount-fixed"
                           >
                             <Banknote className="h-4 w-4 mr-2" /> R$ Fixo
                           </Button>
@@ -317,21 +395,22 @@ export default function POS() {
                             type="number" 
                             value={discountValue} 
                             onChange={(e) => setDiscountValue(Number(e.target.value))}
+                            data-testid="input-discount-value"
                           />
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button onClick={handleApplyDiscount}>Aplicar</Button>
+                        <Button onClick={handleApplyDiscount} data-testid="button-apply-discount">Aplicar</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 )}
               </span>
-              <span className="text-green-600">-{formatCurrency(discountAmount)}</span>
+              <span className="text-green-600" data-testid="text-discount">-{formatCurrency(discountAmount)}</span>
             </div>
             <div className="flex justify-between text-xl font-bold text-primary pt-2 border-t border-border">
               <span>Total</span>
-              <span>{formatCurrency(cartTotal)}</span>
+              <span data-testid="text-total">{formatCurrency(cartTotal)}</span>
             </div>
           </div>
 
@@ -339,8 +418,9 @@ export default function POS() {
              <Button 
               variant="outline" 
               className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => dispatch({ type: 'CLEAR_CART' })}
+              onClick={() => clearCart()}
               disabled={cart.length === 0}
+              data-testid="button-clear-cart"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Limpar
@@ -349,6 +429,7 @@ export default function POS() {
               className="w-full font-bold shadow-md shadow-primary/20" 
               disabled={cart.length === 0}
               onClick={openCheckout}
+              data-testid="button-checkout"
             >
               Finalizar
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -357,21 +438,20 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Weight Input Modal */}
       <Dialog open={weightOpen} onOpenChange={setWeightOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Informar Peso (Gramas)</DialogTitle>
             <DialogDescription>
-              Produto: {selectedWeightProduct?.name} ({formatCurrency(selectedWeightProduct?.price || 0)}/kg)
+              Produto: {selectedWeightProduct?.name} ({formatCurrency(parseFloat(selectedWeightProduct?.price || '0'))}/kg)
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" onClick={() => setWeightInGrams(100)}>100g</Button>
-              <Button variant="outline" onClick={() => setWeightInGrams(250)}>250g</Button>
-              <Button variant="outline" onClick={() => setWeightInGrams(500)}>500g</Button>
-              <Button variant="outline" onClick={() => setWeightInGrams(1000)}>1kg</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(100)} data-testid="button-weight-100">100g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(250)} data-testid="button-weight-250">250g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(500)} data-testid="button-weight-500">500g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(1000)} data-testid="button-weight-1000">1kg</Button>
             </div>
             <div className="grid gap-2">
               <Label>Peso Manual (g)</Label>
@@ -381,6 +461,7 @@ export default function POS() {
                   value={weightInGrams} 
                   onChange={(e) => setWeightInGrams(Number(e.target.value))}
                   className="pr-8"
+                  data-testid="input-weight-grams"
                 />
                 <span className="absolute right-3 top-2.5 text-sm text-muted-foreground">g</span>
               </div>
@@ -388,18 +469,17 @@ export default function POS() {
             <div className="bg-muted/30 p-3 rounded text-center">
               <p className="text-sm text-muted-foreground">Preço calculado</p>
               <p className="text-xl font-bold text-primary">
-                {formatCurrency(((selectedWeightProduct?.price || 0) * weightInGrams) / 1000)}
+                {formatCurrency(((parseFloat(selectedWeightProduct?.price || '0')) * weightInGrams) / 1000)}
               </p>
             </div>
           </div>
           <DialogFooter>
-             <Button variant="outline" onClick={() => setWeightOpen(false)}>Cancelar</Button>
-             <Button onClick={confirmWeightAdd} disabled={weightInGrams <= 0}>Confirmar</Button>
+             <Button variant="outline" onClick={() => setWeightOpen(false)} data-testid="button-cancel-weight">Cancelar</Button>
+             <Button onClick={confirmWeightAdd} disabled={weightInGrams <= 0} data-testid="button-confirm-weight">Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Checkout Modal */}
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
@@ -449,6 +529,7 @@ export default function POS() {
                           value={amountReceived === 0 ? '' : amountReceived}
                           onChange={(e) => setAmountReceived(Number(e.target.value))}
                           placeholder="0,00"
+                          data-testid="input-amount-received"
                         />
                         <span className="absolute right-3 top-2.5 text-muted-foreground text-xs">MZN</span>
                      </div>
@@ -456,7 +537,7 @@ export default function POS() {
                    {amountReceived > 0 && (
                      <div className="flex justify-between items-center pt-2 border-t border-border">
                        <span className="font-bold text-muted-foreground">Troco</span>
-                       <span className={`font-bold text-xl ${change < 0 ? 'text-destructive' : 'text-green-600'}`}>
+                       <span className={`font-bold text-xl ${change < 0 ? 'text-destructive' : 'text-green-600'}`} data-testid="text-change">
                          {formatCurrency(change)}
                        </span>
                      </div>
@@ -473,6 +554,7 @@ export default function POS() {
                   className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
                   onClick={() => handleCheckout('cash')}
                   disabled={amountReceived < cartTotal && amountReceived > 0}
+                  data-testid="button-payment-cash"
                 >
                   <Banknote className="h-5 w-5" />
                   Dinheiro
@@ -481,6 +563,7 @@ export default function POS() {
                   variant="outline" 
                   className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
                   onClick={() => handleCheckout('card')}
+                  data-testid="button-payment-card"
                 >
                   <CreditCard className="h-5 w-5" />
                   Cartão (POS)
@@ -489,6 +572,7 @@ export default function POS() {
                   variant="outline" 
                   className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
                   onClick={() => handleCheckout('pix')}
+                  data-testid="button-payment-pix"
                 >
                   <QrCode className="h-5 w-5" />
                   PIX / M-Pesa
@@ -497,25 +581,14 @@ export default function POS() {
                   variant="outline" 
                   className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
                   onClick={() => handleCheckout('emola')}
+                  data-testid="button-payment-emola"
                 >
                   <CreditCard className="h-5 w-5" />
                   e-Mola
                 </Button>
-                 <Button 
-                  variant="outline" 
-                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
-                  onClick={() => handleCheckout('bank')}
-                >
-                  <Banknote className="h-5 w-5" />
-                  Transf. Bancária
-                </Button>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="sm:justify-between">
-            <Button variant="ghost" onClick={() => setCheckoutOpen(false)}>Voltar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

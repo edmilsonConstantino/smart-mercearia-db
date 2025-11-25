@@ -1,4 +1,4 @@
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { useState, useRef } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from '@/components/ui/input';
@@ -8,29 +8,94 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, FileDown, FileUp, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { Search, Plus, FileDown, FileUp, AlertTriangle, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { Product, UnitType } from '@/lib/types';
+import { Product, productsApi, categoriesApi, systemApi } from '@/lib/api';
 import * as XLSX from 'xlsx';
 import { toast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function Products() {
-  const { state, dispatch } = useApp();
-  const { products, categories } = state;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Mock Add/Edit logic state (simplified for prototype)
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['/api/products'],
+    queryFn: productsApi.getAll
+  });
+
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ['/api/categories'],
+    queryFn: categoriesApi.getAll
+  });
+
+  const { data: editCount } = useQuery({
+    queryKey: ['/api/system/edit-count'],
+    queryFn: systemApi.getEditCount
+  });
+
+  const [newProduct, setNewProduct] = useState({
     name: '',
     sku: '',
-    price: 0,
-    costPrice: 0,
-    stock: 0,
-    unit: 'un',
+    price: '',
+    costPrice: '',
+    stock: '',
+    unit: 'un' as 'un' | 'kg' | 'g' | 'pack' | 'box',
     categoryId: '',
-    minStock: 5,
+    minStock: '5',
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: productsApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/system/edit-count'] });
+      setIsAddOpen(false);
+      setNewProduct({ name: '', sku: '', price: '', costPrice: '', stock: '', unit: 'un', categoryId: '', minStock: '5' });
+      toast({ title: "Sucesso", description: "Produto cadastrado!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => productsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/system/edit-count'] });
+      toast({ title: "Sucesso", description: "Produto atualizado!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: productsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: "Sucesso", description: "Produto deletado!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   });
 
   const filteredProducts = products.filter(p => 
@@ -39,7 +104,18 @@ export default function Products() {
   );
 
   const handleExport = () => {
-    const ws = XLSX.utils.json_to_sheet(products);
+    const exportData = products.map(p => ({
+      Nome: p.name,
+      SKU: p.sku,
+      Preço: parseFloat(p.price),
+      Custo: parseFloat(p.costPrice),
+      Estoque: parseFloat(p.stock),
+      Minimo: parseFloat(p.minStock),
+      Unidade: p.unit,
+      Categoria: categories.find(c => c.id === p.categoryId)?.name || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Produtos");
     XLSX.writeFile(wb, "produtos.xlsx");
@@ -62,47 +138,75 @@ export default function Products() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws) as any[];
       
-      // Map excel data to product structure (simplified mapping)
-      const importedProducts: Product[] = data.map((row: any, index) => ({
-        id: `import-${Date.now()}-${index}`,
-        name: row.name || row.Nome || 'Produto Importado',
-        sku: row.sku || row.SKU || `IMP-${index}`,
-        price: Number(row.price || row.Preço) || 0,
-        costPrice: Number(row.costPrice || row.Custo) || 0,
-        stock: Number(row.stock || row.Estoque) || 0,
-        minStock: Number(row.minStock || row.Minimo) || 5,
-        unit: (row.unit || row.Unidade || 'un') as UnitType,
-        categoryId: 'cat1', // Default category
-        image: ''
-      }));
+      data.forEach((row: any) => {
+        const categoryId = categories.find(c => c.name === row.Categoria)?.id || categories[0]?.id || null;
+        
+        createProductMutation.mutate({
+          name: row.Nome || row.name || 'Produto Importado',
+          sku: row.SKU || row.sku || `IMP-${Date.now()}`,
+          price: String(row.Preço || row.price || 0),
+          costPrice: String(row.Custo || row.costPrice || 0),
+          stock: String(row.Estoque || row.stock || 0),
+          minStock: String(row.Minimo || row.minStock || 5),
+          unit: (row.Unidade || row.unit || 'un') as any,
+          categoryId,
+          image: ''
+        });
+      });
 
-      dispatch({ type: 'IMPORT_PRODUCTS', payload: importedProducts });
-      toast({ title: "Sucesso", description: `${importedProducts.length} produtos importados!` });
+      toast({ title: "Sucesso", description: `Importando ${data.length} produtos...` });
     };
     reader.readAsBinaryString(file);
   };
 
   const handleSaveProduct = () => {
-    if (!newProduct.name || !newProduct.price) return;
+    if (!newProduct.name || !newProduct.price) {
+      toast({ 
+        title: "Erro", 
+        description: "Nome e preço são obrigatórios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (editCount && !editCount.canEdit) {
+      toast({ 
+        title: "Limite atingido", 
+        description: `Você atingiu o limite de ${editCount.limit} edições diárias`,
+        variant: "destructive"
+      });
+      return;
+    }
     
-    const product: Product = {
-      id: `p-${Date.now()}`,
+    createProductMutation.mutate({
       name: newProduct.name,
       sku: newProduct.sku || `SKU-${Date.now()}`,
-      categoryId: newProduct.categoryId || categories[0].id,
-      price: Number(newProduct.price),
-      costPrice: Number(newProduct.costPrice) || 0,
-      stock: Number(newProduct.stock),
-      minStock: Number(newProduct.minStock) || 5,
-      unit: newProduct.unit as UnitType || 'un',
+      categoryId: newProduct.categoryId || categories[0]?.id || null,
+      price: newProduct.price,
+      costPrice: newProduct.costPrice || '0',
+      stock: newProduct.stock || '0',
+      minStock: newProduct.minStock || '5',
+      unit: newProduct.unit,
       image: ''
-    };
-
-    dispatch({ type: 'ADD_PRODUCT', payload: product });
-    setIsAddOpen(false);
-    setNewProduct({ name: '', sku: '', price: 0, costPrice: 0, stock: 0, unit: 'un', categoryId: '', minStock: 5 });
-    toast({ title: "Sucesso", description: "Produto cadastrado!" });
+    });
   };
+
+  const handleDeleteProduct = (id: string) => {
+    if (confirm('Tem certeza que deseja deletar este produto?')) {
+      deleteProductMutation.mutate(id);
+    }
+  };
+
+  if (productsLoading || categoriesLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Carregando produtos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -113,18 +217,18 @@ export default function Products() {
         </div>
         <div className="flex gap-2">
           <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".xlsx,.xls" />
-          <Button variant="outline" onClick={handleImportClick}>
+          <Button variant="outline" onClick={handleImportClick} data-testid="button-import">
             <FileUp className="mr-2 h-4 w-4" />
             Importar
           </Button>
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" onClick={handleExport} data-testid="button-export">
             <FileDown className="mr-2 h-4 w-4" />
             Exportar
           </Button>
           
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <Button className="shadow-lg shadow-primary/20">
+              <Button className="shadow-lg shadow-primary/20" data-testid="button-add-product">
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Produto
               </Button>
@@ -134,12 +238,21 @@ export default function Products() {
                 <DialogTitle>Adicionar Produto</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                {editCount && !editCount.canEdit && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Você atingiu o limite de {editCount.limit} edições diárias. Você já fez {editCount.count} edições hoje.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Nome do Produto</Label>
                     <Input 
                       value={newProduct.name} 
                       onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                      data-testid="input-product-name"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -148,6 +261,7 @@ export default function Products() {
                       value={newProduct.sku} 
                       onChange={e => setNewProduct({...newProduct, sku: e.target.value})}
                       placeholder="Gerado automaticamente se vazio"
+                      data-testid="input-product-sku"
                     />
                   </div>
                 </div>
@@ -158,7 +272,8 @@ export default function Products() {
                     <Input 
                       type="number" 
                       value={newProduct.price} 
-                      onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
+                      onChange={e => setNewProduct({...newProduct, price: e.target.value})}
+                      data-testid="input-product-price"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -166,16 +281,17 @@ export default function Products() {
                     <Input 
                       type="number" 
                       value={newProduct.costPrice} 
-                      onChange={e => setNewProduct({...newProduct, costPrice: Number(e.target.value)})}
+                      onChange={e => setNewProduct({...newProduct, costPrice: e.target.value})}
+                      data-testid="input-product-cost"
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label>Unidade</Label>
                     <Select 
                       value={newProduct.unit} 
-                      onValueChange={(val: UnitType) => setNewProduct({...newProduct, unit: val})}
+                      onValueChange={(val: any) => setNewProduct({...newProduct, unit: val})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger data-testid="select-product-unit">
                         <SelectValue placeholder="Unidade" />
                       </SelectTrigger>
                       <SelectContent>
@@ -195,7 +311,8 @@ export default function Products() {
                     <Input 
                       type="number" 
                       value={newProduct.stock} 
-                      onChange={e => setNewProduct({...newProduct, stock: Number(e.target.value)})}
+                      onChange={e => setNewProduct({...newProduct, stock: e.target.value})}
+                      data-testid="input-product-stock"
                     />
                   </div>
                    <div className="grid gap-2">
@@ -203,7 +320,8 @@ export default function Products() {
                     <Input 
                       type="number" 
                       value={newProduct.minStock} 
-                      onChange={e => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
+                      onChange={e => setNewProduct({...newProduct, minStock: e.target.value})}
+                      data-testid="input-product-minstock"
                     />
                   </div>
                    <div className="grid gap-2">
@@ -212,7 +330,7 @@ export default function Products() {
                       value={newProduct.categoryId} 
                       onValueChange={(val) => setNewProduct({...newProduct, categoryId: val})}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger data-testid="select-product-category">
                         <SelectValue placeholder="Categoria" />
                       </SelectTrigger>
                       <SelectContent>
@@ -224,11 +342,27 @@ export default function Products() {
                   </div>
                 </div>
               </div>
-              <Button onClick={handleSaveProduct}>Salvar Produto</Button>
+              <Button 
+                onClick={handleSaveProduct} 
+                disabled={createProductMutation.isPending || (editCount && !editCount.canEdit)}
+                data-testid="button-save-product"
+              >
+                {createProductMutation.isPending ? 'Salvando...' : 'Salvar Produto'}
+              </Button>
             </DialogContent>
           </Dialog>
         </div>
       </div>
+
+      {editCount && editCount.count > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Você fez {editCount.count} de {editCount.limit} edições permitidas hoje.
+            {!editCount.canEdit && ' Limite atingido!'}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="border-primary/10">
         <CardHeader className="pb-2">
@@ -239,6 +373,7 @@ export default function Products() {
               className="pl-9" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-search-products"
             />
           </div>
         </CardHeader>
@@ -257,11 +392,14 @@ export default function Products() {
             <TableBody>
               {filteredProducts.map((product) => {
                 const category = categories.find(c => c.id === product.categoryId);
+                const parsedStock = parseFloat(product.stock);
+                const parsedMinStock = parseFloat(product.minStock);
+
                 return (
-                  <TableRow key={product.id}>
+                  <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {product.stock <= product.minStock && (
+                        {parsedStock <= parsedMinStock && (
                           <AlertTriangle className="h-4 w-4 text-destructive" />
                         )}
                         {product.name}
@@ -275,25 +413,24 @@ export default function Products() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span>{formatCurrency(product.price)}</span>
-                        <span className="text-[10px] text-muted-foreground">Custo: {formatCurrency(product.costPrice)}</span>
+                        <span>{formatCurrency(parseFloat(product.price))}</span>
+                        <span className="text-[10px] text-muted-foreground">Custo: {formatCurrency(parseFloat(product.costPrice))}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={product.stock <= product.minStock ? "text-destructive font-bold" : ""}>
-                        {product.stock}
+                      <span className={parsedStock <= parsedMinStock ? "text-destructive font-bold" : ""}>
+                        {parsedStock}
                       </span>
                     </TableCell>
                     <TableCell className="uppercase">{product.unit}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
                       <Button 
                         variant="ghost" 
                         size="icon" 
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => dispatch({ type: 'DELETE_PRODUCT', payload: product.id })}
+                        onClick={() => handleDeleteProduct(product.id)}
+                        disabled={deleteProductMutation.isPending}
+                        data-testid={`button-delete-${product.id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

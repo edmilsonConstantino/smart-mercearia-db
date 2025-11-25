@@ -13,6 +13,7 @@ import Tasks from "@/pages/Tasks";
 import SettingsPage from "@/pages/Settings";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AuthProvider } from "@/lib/auth";
+import { CartProvider } from "@/lib/cart";
 
 function Router() {
   return (
@@ -48,10 +49,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Router />
-          <Toaster />
-        </TooltipProvider>
+        <CartProvider>
+          <TooltipProvider>
+            <Router />
+            <Toaster />
+          </TooltipProvider>
+        </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
