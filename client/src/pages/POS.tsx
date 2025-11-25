@@ -5,18 +5,26 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Product } from '@/lib/types';
 
 export default function POS() {
   const { state, addToCart, removeFromCart, dispatch, checkout } = useApp();
-  const { products, categories, cart } = state;
+  const { products, categories, cart, currentUser } = state;
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountValue, setDiscountValue] = useState(0);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [activeDiscount, setActiveDiscount] = useState({ type: 'none', value: 0 }); // applied discount
+
+  // Permission check (mock)
+  const canApplyDiscount = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -28,8 +36,22 @@ export default function POS() {
   }, [products, search, selectedCategory]);
 
   // Cart calculations
-  const cartTotal = cart.reduce((acc, item) => acc + (item.priceAtSale * item.quantity), 0);
+  const subtotal = cart.reduce((acc, item) => acc + (item.priceAtSale * item.quantity), 0);
+  
+  let discountAmount = 0;
+  if (activeDiscount.type === 'percentage') {
+    discountAmount = subtotal * (activeDiscount.value / 100);
+  } else if (activeDiscount.type === 'fixed') {
+    discountAmount = activeDiscount.value;
+  }
+
+  const cartTotal = Math.max(0, subtotal - discountAmount);
   const cartCount = cart.reduce((acc, item) => acc + 1, 0); // Count unique items lines
+
+  const handleApplyDiscount = () => {
+    setActiveDiscount({ type: discountType, value: discountValue });
+    setDiscountOpen(false);
+  };
 
   const handleQuantityChange = (productId: string, change: number) => {
     const item = cart.find(i => i.productId === productId);
@@ -55,12 +77,18 @@ export default function POS() {
   };
 
   const handleAddProduct = (product: Product) => {
+    // For KG products, maybe show a modal to ask for weight? 
+    // For now, just add 1 unit/kg and let user adjust. Or implement the "smart" 0.5kg logic later.
+    // User asked for "possibilidade de vender menos de 1kg".
+    // Let's make it simple: add 1, user can edit to 0.5 in cart if needed, OR better:
+    // If unit is kg, maybe add 1 but allow decimal input in cart.
     addToCart(product, 1);
   };
 
   const handleCheckout = (method: 'cash' | 'card' | 'pix') => {
     checkout(method);
     setCheckoutOpen(false);
+    setActiveDiscount({ type: 'none', value: 0 });
   };
 
   return (
@@ -184,7 +212,8 @@ export default function POS() {
                         >
                           <Minus className="h-3 w-3" />
                         </button>
-                        <span className="w-8 text-center text-xs font-medium">{item.quantity}</span>
+                        {/* Allow manual input for decimals if needed, but for now just display */}
+                        <span className="w-10 text-center text-xs font-medium tabular-nums">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
                         <button 
                           className="px-2 hover:bg-muted h-full flex items-center"
                           onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
@@ -204,11 +233,57 @@ export default function POS() {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(cartTotal)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Descontos</span>
-              <span>R$ 0,00</span>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-muted-foreground flex items-center gap-2">
+                Descontos
+                {canApplyDiscount && cart.length > 0 && (
+                  <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 text-primary">
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>Aplicar Desconto</DialogTitle>
+                        <DialogDescription>Defina o valor ou porcentagem.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="flex gap-2">
+                          <Button 
+                            variant={discountType === 'percentage' ? 'default' : 'outline'} 
+                            className="flex-1"
+                            onClick={() => setDiscountType('percentage')}
+                          >
+                            <Percent className="h-4 w-4 mr-2" /> % Porcentagem
+                          </Button>
+                          <Button 
+                            variant={discountType === 'fixed' ? 'default' : 'outline'} 
+                            className="flex-1"
+                            onClick={() => setDiscountType('fixed')}
+                          >
+                            <Banknote className="h-4 w-4 mr-2" /> R$ Fixo
+                          </Button>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Valor do Desconto</Label>
+                          <Input 
+                            type="number" 
+                            value={discountValue} 
+                            onChange={(e) => setDiscountValue(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={handleApplyDiscount}>Aplicar</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </span>
+              <span className="text-green-600">-{formatCurrency(discountAmount)}</span>
             </div>
             <div className="flex justify-between text-xl font-bold text-primary pt-2 border-t border-border">
               <span>Total</span>

@@ -26,9 +26,11 @@ export default function Products() {
     name: '',
     sku: '',
     price: 0,
+    costPrice: 0,
     stock: 0,
     unit: 'un',
     categoryId: '',
+    minStock: 5,
   });
 
   const filteredProducts = products.filter(p => 
@@ -89,16 +91,16 @@ export default function Products() {
       sku: newProduct.sku || `SKU-${Date.now()}`,
       categoryId: newProduct.categoryId || categories[0].id,
       price: Number(newProduct.price),
-      costPrice: 0, // Simplified
+      costPrice: Number(newProduct.costPrice) || 0,
       stock: Number(newProduct.stock),
-      minStock: 5,
+      minStock: Number(newProduct.minStock) || 5,
       unit: newProduct.unit as UnitType || 'un',
       image: ''
     };
 
     dispatch({ type: 'ADD_PRODUCT', payload: product });
     setIsAddOpen(false);
-    setNewProduct({ name: '', sku: '', price: 0, stock: 0, unit: 'un', categoryId: '' });
+    setNewProduct({ name: '', sku: '', price: 0, costPrice: 0, stock: 0, unit: 'un', categoryId: '', minStock: 5 });
     toast({ title: "Sucesso", description: "Produto cadastrado!" });
   };
 
@@ -127,25 +129,44 @@ export default function Products() {
                 Novo Produto
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Adicionar Produto</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label>Nome do Produto</Label>
-                  <Input 
-                    value={newProduct.name} 
-                    onChange={e => setNewProduct({...newProduct, name: e.target.value})}
-                  />
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label>Preço (R$)</Label>
+                    <Label>Nome do Produto</Label>
+                    <Input 
+                      value={newProduct.name} 
+                      onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Código (SKU)</Label>
+                    <Input 
+                      value={newProduct.sku} 
+                      onChange={e => setNewProduct({...newProduct, sku: e.target.value})}
+                      placeholder="Gerado automaticamente se vazio"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Preço Venda (R$)</Label>
                     <Input 
                       type="number" 
                       value={newProduct.price} 
                       onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Preço Custo (R$)</Label>
+                    <Input 
+                      type="number" 
+                      value={newProduct.costPrice} 
+                      onChange={e => setNewProduct({...newProduct, costPrice: Number(e.target.value)})}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -167,13 +188,22 @@ export default function Products() {
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                
+                <div className="grid grid-cols-3 gap-4">
                   <div className="grid gap-2">
                     <Label>Estoque Inicial</Label>
                     <Input 
                       type="number" 
                       value={newProduct.stock} 
                       onChange={e => setNewProduct({...newProduct, stock: Number(e.target.value)})}
+                    />
+                  </div>
+                   <div className="grid gap-2">
+                    <Label>Estoque Mínimo (Alerta)</Label>
+                    <Input 
+                      type="number" 
+                      value={newProduct.minStock} 
+                      onChange={e => setNewProduct({...newProduct, minStock: Number(e.target.value)})}
                     />
                   </div>
                    <div className="grid gap-2">
@@ -243,7 +273,12 @@ export default function Products() {
                         {category?.name || 'Geral'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatCurrency(product.price)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span>{formatCurrency(product.price)}</span>
+                        <span className="text-[10px] text-muted-foreground">Custo: {formatCurrency(product.costPrice)}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span className={product.stock <= product.minStock ? "text-destructive font-bold" : ""}>
                         {product.stock}

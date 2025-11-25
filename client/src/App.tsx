@@ -10,6 +10,7 @@ import POS from "@/pages/POS";
 import Products from "@/pages/Products";
 import Reports from "@/pages/Reports";
 import Tasks from "@/pages/Tasks";
+import SettingsPage from "@/pages/Settings";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { AppProvider } from "@/lib/store";
 
@@ -33,6 +34,9 @@ function Router() {
       </Route>
       <Route path="/tasks">
         <MainLayout><Tasks /></MainLayout>
+      </Route>
+      <Route path="/settings">
+        <MainLayout><SettingsPage /></MainLayout>
       </Route>
       
       <Route component={NotFound} />
