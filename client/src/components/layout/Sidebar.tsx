@@ -98,16 +98,18 @@ export function Sidebar() {
         {filteredNav.map((item) => {
           const isActive = location === item.href;
           return (
-            <Link key={item.href} href={item.href}>
-              <a className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group",
+            <Link 
+              key={item.href} 
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group no-underline",
                 isActive 
                   ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20 font-medium" 
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}>
-                <item.icon className={cn("h-5 w-5", isActive ? "text-current" : "text-muted-foreground group-hover:text-current")} />
-                <span>{item.label}</span>
-              </a>
+              )}
+            >
+              <item.icon className={cn("h-5 w-5", isActive ? "text-current" : "text-muted-foreground group-hover:text-current")} />
+              <span>{item.label}</span>
             </Link>
           );
         })}

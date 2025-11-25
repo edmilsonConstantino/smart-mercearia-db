@@ -257,7 +257,8 @@ export default function SettingsPage() {
               <CardTitle>Usuários do Sistema</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
+              <div className="overflow-x-auto -mx-6 px-6">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
@@ -294,6 +295,7 @@ export default function SettingsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -304,7 +306,8 @@ export default function SettingsPage() {
               <CardTitle>Controle de Acesso por Grupo</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
+              <div className="overflow-x-auto -mx-6 px-6">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Permissão</TableHead>
@@ -340,6 +343,7 @@ export default function SettingsPage() {
                   </TableRow>
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
