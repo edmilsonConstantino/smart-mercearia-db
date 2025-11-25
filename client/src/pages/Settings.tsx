@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, UserPlus, Lock, Activity, History, Search, Eye, AlertCircle } from 'lucide-react';
+import { Shield, UserPlus, Lock, Activity, History, Search, Eye, AlertCircle, ShoppingCart, Package, Trash2, Edit, Plus, DollarSign, Calendar, TrendingUp, Users } from 'lucide-react';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -89,11 +89,46 @@ export default function SettingsPage() {
     });
   };
 
-  const filteredAuditLogs = auditLogs.filter(log => 
-    log.action.toLowerCase().includes(searchHistory.toLowerCase()) ||
-    log.userId.toLowerCase().includes(searchHistory.toLowerCase()) ||
-    (log.entityId && log.entityId.toLowerCase().includes(searchHistory.toLowerCase()))
-  );
+  const [actionFilter, setActionFilter] = useState<string>('all');
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const matchesSearch = log.action.toLowerCase().includes(searchHistory.toLowerCase()) ||
+      (log.userId && log.userId.toLowerCase().includes(searchHistory.toLowerCase())) ||
+      (log.entityId && log.entityId.toLowerCase().includes(searchHistory.toLowerCase()));
+    
+    const matchesFilter = actionFilter === 'all' || log.action.includes(actionFilter.toUpperCase());
+    
+    return matchesSearch && matchesFilter;
+  });
+
+  const getActionIcon = (action: string) => {
+    if (action.includes('CREATE')) return <Plus className="h-4 w-4" />;
+    if (action.includes('UPDATE') || action.includes('EDIT')) return <Edit className="h-4 w-4" />;
+    if (action.includes('DELETE')) return <Trash2 className="h-4 w-4" />;
+    if (action.includes('SALE')) return <ShoppingCart className="h-4 w-4" />;
+    if (action.includes('PRODUCT')) return <Package className="h-4 w-4" />;
+    if (action.includes('USER')) return <Users className="h-4 w-4" />;
+    return <Activity className="h-4 w-4" />;
+  };
+
+  const getActionColor = (action: string) => {
+    if (action.includes('CREATE')) return 'bg-green-100 text-green-800 border-green-300';
+    if (action.includes('UPDATE') || action.includes('EDIT')) return 'bg-blue-100 text-blue-800 border-blue-300';
+    if (action.includes('DELETE')) return 'bg-red-100 text-red-800 border-red-300';
+    if (action.includes('SALE')) return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+    return 'bg-gray-100 text-gray-800 border-gray-300';
+  };
+
+  const auditStats = {
+    total: auditLogs.length,
+    today: auditLogs.filter(log => {
+      const logDate = new Date(log.createdAt);
+      const today = new Date();
+      return logDate.toDateString() === today.toDateString();
+    }).length,
+    creates: auditLogs.filter(log => log.action.includes('CREATE')).length,
+    sales: auditLogs.filter(log => log.action.includes('SALE')).length,
+  };
 
   const handleSaveUser = () => {
     if (!newUser.username || !newUser.name || !newUser.password) {
@@ -309,65 +344,164 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="audit" className="space-y-4">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar ação, usuário ou entidade..." 
-                className="pl-9" 
-                value={searchHistory}
-                onChange={(e) => setSearchHistory(e.target.value)}
-                data-testid="input-search-audit"
-              />
-            </div>
+        <TabsContent value="audit" className="space-y-6">
+          {/* Estatísticas de Auditoria */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total de Ações</p>
+                    <h3 className="text-3xl font-bold mt-2">{auditStats.total}</h3>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Activity className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-emerald-500">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Hoje</p>
+                    <h3 className="text-3xl font-bold mt-2">{auditStats.today}</h3>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-emerald-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-green-500">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Criações</p>
+                    <h3 className="text-3xl font-bold mt-2">{auditStats.creates}</h3>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                    <Plus className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-orange-500">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Vendas</p>
+                    <h3 className="text-3xl font-bold mt-2">{auditStats.sales}</h3>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
+          {/* Filtros e Busca */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Buscar ação, usuário ou entidade..." 
+                    className="pl-9" 
+                    value={searchHistory}
+                    onChange={(e) => setSearchHistory(e.target.value)}
+                    data-testid="input-search-audit"
+                  />
+                </div>
+                <Select value={actionFilter} onValueChange={setActionFilter}>
+                  <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="Filtrar por ação" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Ações</SelectItem>
+                    <SelectItem value="create">Criações</SelectItem>
+                    <SelectItem value="update">Atualizações</SelectItem>
+                    <SelectItem value="delete">Exclusões</SelectItem>
+                    <SelectItem value="sale">Vendas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Timeline de Auditoria */}
           <Card>
             <CardHeader>
-              <CardTitle>Rastreio Completo de Atividades</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Linha do Tempo de Atividades
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data/Hora</TableHead>
-                    <TableHead>Usuário</TableHead>
-                    <TableHead>Ação</TableHead>
-                    <TableHead>Entidade</TableHead>
-                    <TableHead>Detalhes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAuditLogs.map((log) => {
+              <div className="space-y-4">
+                {filteredAuditLogs.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhuma atividade encontrada</p>
+                  </div>
+                ) : (
+                  filteredAuditLogs.map((log, index) => {
                     const logUser = users.find(u => u.id === log.userId);
                     return (
-                      <TableRow key={log.id} data-testid={`row-audit-${log.id}`}>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(log.createdAt), "dd/MM/yy HH:mm", { locale: ptBR })}
-                        </TableCell>
-                        <TableCell className="font-medium">{logUser?.name || 'Sistema'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                            {log.action}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs font-mono">{log.entityType}</span>
-                          {log.entityId && (
-                            <span className="text-xs text-muted-foreground ml-1">#{log.entityId.slice(-6)}</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-xs text-muted-foreground max-w-md truncate">
-                            {log.details ? JSON.stringify(log.details) : '-'}
+                      <div 
+                        key={log.id} 
+                        data-testid={`row-audit-${log.id}`}
+                        className="relative pl-8 pb-8 border-l-2 border-border last:border-0 last:pb-0"
+                      >
+                        {/* Timeline dot */}
+                        <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-background ${getActionColor(log.action).replace('text-', 'bg-').split(' ')[0]}`} />
+                        
+                        <div className="bg-muted/30 rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-start justify-between gap-4 mb-3">
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline" className={`${getActionColor(log.action)} border font-medium flex items-center gap-1`}>
+                                {getActionIcon(log.action)}
+                                {log.action}
+                              </Badge>
+                              <span className="text-sm font-mono text-muted-foreground">
+                                {log.entityType}
+                                {log.entityId && <span className="ml-1">#{log.entityId.slice(-6)}</span>}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {format(new Date(log.createdAt), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                            </span>
                           </div>
-                        </TableCell>
-                      </TableRow>
+
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                              {logUser?.name?.charAt(0)?.toUpperCase() ?? 'S'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{logUser?.name || 'Sistema'}</p>
+                              <p className="text-xs text-muted-foreground">@{logUser?.username || 'sistema'}</p>
+                            </div>
+                          </div>
+
+                          {log.details && (
+                            <div className="mt-3 p-3 bg-background/50 rounded border border-border">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">Detalhes da Ação:</p>
+                              <pre className="text-xs overflow-x-auto">
+                                {JSON.stringify(log.details, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     );
-                  })}
-                </TableBody>
-              </Table>
+                  })
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
