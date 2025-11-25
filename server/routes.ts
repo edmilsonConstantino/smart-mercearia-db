@@ -449,6 +449,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== TASKS ROUTES ====================
+  
+  app.get("/api/tasks", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tasks = await storage.getTasksByUser(req.session.userId!, req.session.role!);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Get tasks error:", error);
+      res.status(500).json({ error: "Erro ao buscar tarefas" });
+    }
+  });
+
+  app.post("/api/tasks", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const taskData = {
+        ...req.body,
+        createdBy: req.session.userId!
+      };
+      const newTask = await storage.createTask(taskData);
+      res.json(newTask);
+    } catch (error) {
+      console.error("Create task error:", error);
+      res.status(500).json({ error: "Erro ao criar tarefa" });
+    }
+  });
+
+  app.patch("/api/tasks/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const updated = await storage.updateTask(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Tarefa não encontrada" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Update task error:", error);
+      res.status(500).json({ error: "Erro ao atualizar tarefa" });
+    }
+  });
+
+  app.delete("/api/tasks/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteTask(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete task error:", error);
+      res.status(500).json({ error: "Erro ao deletar tarefa" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

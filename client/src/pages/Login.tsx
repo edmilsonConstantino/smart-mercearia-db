@@ -122,17 +122,8 @@ export default function Login() {
             >
               {isSubmitting ? 'Entrando...' : 'Entrar no Sistema'}
             </Button>
-            
-            <div className="text-center space-y-2 pt-4">
-              <p className="text-xs text-muted-foreground">Credenciais de teste:</p>
-              <div className="text-xs space-y-1 bg-muted/50 p-3 rounded-lg">
-                <p><strong>Admin:</strong> admin / senha123</p>
-                <p><strong>Vendedor:</strong> joao / senha123</p>
-                <p><strong>Gerente:</strong> maria / senha123</p>
-              </div>
-            </div>
 
-            <div className="text-center text-xs text-muted-foreground pt-2">
+            <div className="text-center text-xs text-muted-foreground pt-6">
               &copy; 2025 Fresh Market Sistema Inteligente
             </div>
           </form>

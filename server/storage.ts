@@ -6,7 +6,8 @@ import {
   type Notification, type InsertNotification,
   type AuditLog, type InsertAuditLog,
   type DailyEdit, type InsertDailyEdit,
-  users, products, categories, sales, notifications, auditLogs, dailyEdits
+  type Task, type InsertTask,
+  users, products, categories, sales, notifications, auditLogs, dailyEdits, tasks
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -51,6 +52,13 @@ export interface IStorage {
   getDailyEdits(userId: string, date: string): Promise<DailyEdit | undefined>;
   incrementDailyEdits(userId: string, date: string): Promise<void>;
   canUserEdit(userId: string, role: string): Promise<boolean>;
+
+  // Tasks
+  getAllTasks(): Promise<Task[]>;
+  getTasksByUser(userId: string, role: string): Promise<Task[]>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, updates: Partial<Pick<Task, 'completed'>>): Promise<Task | undefined>;
+  deleteTask(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +238,40 @@ export class DatabaseStorage implements IStorage {
       return !dailyEdit || dailyEdit.editCount < 5;
     }
     return false;
+  }
+
+  // TASKS
+  async getAllTasks(): Promise<Task[]> {
+    return await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+  }
+
+  async getTasksByUser(userId: string, role: string): Promise<Task[]> {
+    if (role === 'admin') {
+      return await this.getAllTasks();
+    }
+    
+    return await db.select().from(tasks)
+      .where(
+        sql`${tasks.assignedTo} = 'all' OR ${tasks.assignedTo} = ${role} OR ${tasks.assignedToId} = ${userId}`
+      )
+      .orderBy(desc(tasks.createdAt));
+  }
+
+  async createTask(task: InsertTask): Promise<Task> {
+    const [newTask] = await db.insert(tasks).values(task).returning();
+    return newTask;
+  }
+
+  async updateTask(id: string, updates: Partial<Pick<Task, 'completed'>>): Promise<Task | undefined> {
+    const [updated] = await db.update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await db.delete(tasks).where(eq(tasks.id, id));
   }
 }
 

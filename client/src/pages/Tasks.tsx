@@ -1,5 +1,5 @@
 import { useAuth } from '@/lib/auth';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,81 +7,119 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Trash2, CheckSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-
-interface Todo {
-  id: string;
-  text: string;
-  completed: boolean;
-  assignedTo: 'all' | 'seller' | 'manager' | 'admin';
-  createdBy: string;
-  userId: string;
-  userName: string;
-}
-
-const TASKS_STORAGE_KEY = 'fresh_market_tasks_global';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { tasksApi, usersApi } from '@/lib/api';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Tasks() {
   const { user } = useAuth();
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [newTodoText, setNewTodoText] = useState('');
+  const queryClient = useQueryClient();
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [assignedTo, setAssignedTo] = useState<'all' | 'admin' | 'manager' | 'seller' | 'user'>('all');
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
 
-  useEffect(() => {
-    const storedTodos = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (storedTodos) {
-      setTodos(JSON.parse(storedTodos));
-    }
-  }, []);
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: tasksApi.getAll,
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    if (todos.length > 0) {
-      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(todos));
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.getAll,
+    enabled: !!user && user.role === 'admin',
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: tasksApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setNewTaskTitle('');
+      setAssignedTo('all');
+      setSelectedUserId('');
+      toast({
+        title: "Tarefa criada",
+        description: "A tarefa foi adicionada com sucesso.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Erro ao criar tarefa",
+        description: error.message,
+      });
     }
-  }, [todos]);
+  });
+
+  const toggleTaskMutation = useMutation({
+    mutationFn: ({ id, completed }: { id: string; completed: boolean }) => 
+      tasksApi.update(id, { completed }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: tasksApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast({
+        title: "Tarefa removida",
+      });
+    },
+  });
 
   if (!user) return null;
 
-  const filteredTodos = user.role === 'admin' 
-    ? todos
-    : todos.filter(t => 
-        t.assignedTo === 'all' || 
-        t.assignedTo === user.role ||
-        t.userId === user.id
-      );
+  const handleAddTask = () => {
+    if (!newTaskTitle.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Campo obrigatório",
+        description: "Digite o título da tarefa.",
+      });
+      return;
+    }
 
-  const handleAddTodo = () => {
-    if (!newTodoText.trim()) return;
-    
-    const newTodo: Todo = {
-      id: `t-${Date.now()}`,
-      text: newTodoText,
-      completed: false,
-      assignedTo: 'all',
-      createdBy: user.name,
-      userId: user.id,
-      userName: user.name
-    };
-    
-    setTodos(prev => [newTodo, ...prev]);
-    setNewTodoText('');
-    
-    toast({
-      title: "Tarefa adicionada",
-      description: newTodoText,
+    if (assignedTo === 'user' && !selectedUserId) {
+      toast({
+        variant: "destructive",
+        title: "Selecione um usuário",
+        description: "Escolha um usuário para atribuir a tarefa.",
+      });
+      return;
+    }
+
+    createTaskMutation.mutate({
+      title: newTaskTitle,
+      assignedTo,
+      assignedToId: assignedTo === 'user' ? selectedUserId : undefined,
     });
   };
 
-  const handleToggleTodo = (id: string) => {
-    setTodos(prev => prev.map(t => 
-      t.id === id ? { ...t, completed: !t.completed } : t
-    ));
+  const handleToggleTask = (id: string, completed: boolean) => {
+    toggleTaskMutation.mutate({ id, completed: !completed });
   };
 
-  const handleDeleteTodo = (id: string) => {
-    setTodos(prev => prev.filter(t => t.id !== id));
-    toast({
-      title: "Tarefa removida",
-    });
+  const handleDeleteTask = (id: string) => {
+    deleteTaskMutation.mutate(id);
   };
+
+  const getAssignedToLabel = (task: typeof tasks[0]) => {
+    if (task.assignedTo === 'all') return 'Todos';
+    if (task.assignedTo === 'user' && task.assignedToId) {
+      const assignedUser = users.find(u => u.id === task.assignedToId);
+      return assignedUser ? assignedUser.name : 'Usuário';
+    }
+    if (task.assignedTo === 'admin') return 'Admins';
+    if (task.assignedTo === 'manager') return 'Gerentes';
+    if (task.assignedTo === 'seller') return 'Vendedores';
+    return task.assignedTo;
+  };
+
+  const pendingCount = tasks.filter(t => !t.completed).length;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -97,72 +135,115 @@ export default function Tasks() {
           </p>
         </div>
         <Badge variant="outline" className="text-xs">
-          {filteredTodos.filter(t => !t.completed).length} pendentes
+          {pendingCount} pendentes
         </Badge>
       </div>
 
       <Card className="border-emerald-200 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50 border-b border-emerald-100">
+        <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50 border-b border-emerald-100 space-y-4">
           <div className="flex gap-2">
             <Input 
               data-testid="input-new-task"
               placeholder="Nova tarefa..." 
-              value={newTodoText}
-              onChange={(e) => setNewTodoText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
               className="bg-background border-emerald-200"
             />
             <Button 
               data-testid="button-add-task"
-              onClick={handleAddTodo}
+              onClick={handleAddTask}
               className="bg-emerald-500 hover:bg-emerald-600"
+              disabled={createTaskMutation.isPending}
             >
               <Plus className="mr-2 h-4 w-4" />
               Adicionar
             </Button>
           </div>
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Atribuir tarefa para:</Label>
+            <RadioGroup value={assignedTo} onValueChange={(value: any) => setAssignedTo(value)}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="all" id="all" />
+                <Label htmlFor="all" className="font-normal cursor-pointer">Todos</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="admin" id="admin" />
+                <Label htmlFor="admin" className="font-normal cursor-pointer">Administradores</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="manager" id="manager" />
+                <Label htmlFor="manager" className="font-normal cursor-pointer">Gerentes</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="seller" id="seller" />
+                <Label htmlFor="seller" className="font-normal cursor-pointer">Vendedores</Label>
+              </div>
+              {user.role === 'admin' && (
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="user" id="user" />
+                  <Label htmlFor="user" className="font-normal cursor-pointer">Usuário específico</Label>
+                </div>
+              )}
+            </RadioGroup>
+
+            {assignedTo === 'user' && user.role === 'admin' && (
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="bg-background border-emerald-200">
+                  <SelectValue placeholder="Selecione um usuário" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
-          {filteredTodos.length === 0 ? (
+          {isLoading ? (
+            <div className="p-8 text-center text-muted-foreground">
+              Carregando tarefas...
+            </div>
+          ) : tasks.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <CheckSquare className="h-12 w-12 mx-auto mb-4 opacity-20" />
               <p>Nenhuma tarefa pendente. Bom trabalho!</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {filteredTodos.map((todo) => (
+              {tasks.map((task) => (
                 <div 
-                  key={todo.id} 
-                  data-testid={`task-${todo.id}`}
+                  key={task.id} 
+                  data-testid={`task-${task.id}`}
                   className="flex items-center p-4 hover:bg-muted/20 transition-colors group"
                 >
                   <Checkbox 
-                    data-testid={`checkbox-${todo.id}`}
-                    checked={todo.completed} 
-                    onCheckedChange={() => handleToggleTodo(todo.id)}
+                    data-testid={`checkbox-${task.id}`}
+                    checked={task.completed} 
+                    onCheckedChange={() => handleToggleTask(task.id, task.completed)}
                     className="mr-4"
                   />
                   <div className="flex-1">
-                    <p className={`font-medium ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>
-                      {todo.text}
+                    <p className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                      {task.title}
                     </p>
                     <div className="flex gap-2 mt-1">
                       <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                        {todo.assignedTo === 'all' ? 'Geral' : todo.assignedTo}
+                        {getAssignedToLabel(task)}
                       </Badge>
-                      {user.role === 'admin' && todo.userId !== user.id && (
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5">
-                          por {todo.userName}
-                        </Badge>
-                      )}
                     </div>
                   </div>
                   <Button 
-                    data-testid={`button-delete-${todo.id}`}
+                    data-testid={`button-delete-${task.id}`}
                     variant="ghost" 
                     size="icon" 
                     className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                    onClick={() => handleDeleteTodo(todo.id)}
+                    onClick={() => handleDeleteTask(task.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

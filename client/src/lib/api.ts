@@ -77,6 +77,16 @@ export interface EditCount {
   canEdit: boolean;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  completed: boolean;
+  assignedTo: 'all' | 'admin' | 'manager' | 'seller' | 'user';
+  assignedToId?: string;
+  createdBy: string;
+  createdAt: Date;
+}
+
 // Auth API
 export const authApi = {
   login: async (data: LoginRequest): Promise<User> => {
@@ -270,5 +280,53 @@ export const systemApi = {
     const res = await fetch(`${API_BASE}/system/edit-count`, { credentials: 'include' });
     if (!res.ok) throw new Error('Erro ao buscar contagem de edições');
     return res.json();
+  }
+};
+
+// Tasks API
+export const tasksApi = {
+  getAll: async (): Promise<Task[]> => {
+    const res = await fetch(`${API_BASE}/tasks`, { credentials: 'include' });
+    if (!res.ok) throw new Error('Erro ao buscar tarefas');
+    return res.json();
+  },
+
+  create: async (data: { title: string; assignedTo: Task['assignedTo']; assignedToId?: string }): Promise<Task> => {
+    const res = await fetch(`${API_BASE}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Erro ao criar tarefa');
+    }
+    return res.json();
+  },
+
+  update: async (id: string, data: { completed?: boolean }): Promise<Task> => {
+    const res = await fetch(`${API_BASE}/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Erro ao atualizar tarefa');
+    }
+    return res.json();
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/tasks/${id}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Erro ao deletar tarefa');
+    }
   }
 };

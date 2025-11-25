@@ -62,13 +62,20 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-              <Bell className="h-5 w-5 text-muted-foreground" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="relative hover:bg-accent hover:text-accent-foreground transition-colors" 
+              data-testid="button-notifications"
+            >
+              <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full animate-pulse" data-testid="badge-unread" />
+                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-destructive rounded-full animate-pulse flex items-center justify-center text-[10px] font-bold text-white" data-testid="badge-unread">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               )}
             </Button>
           </DropdownMenuTrigger>

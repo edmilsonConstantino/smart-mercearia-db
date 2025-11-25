@@ -111,3 +111,18 @@ export const dailyEdits = pgTable("daily_edits", {
 export const insertDailyEditSchema = createInsertSchema(dailyEdits).omit({ id: true });
 export type InsertDailyEdit = z.infer<typeof insertDailyEditSchema>;
 export type DailyEdit = typeof dailyEdits.$inferSelect;
+
+// TASKS TABLE
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  completed: boolean("completed").default(false).notNull(),
+  assignedTo: text("assigned_to").notNull().$type<'all' | 'admin' | 'manager' | 'seller' | 'user'>(), // 'user' means specific user
+  assignedToId: varchar("assigned_to_id").references(() => users.id), // Only used if assignedTo = 'user'
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
