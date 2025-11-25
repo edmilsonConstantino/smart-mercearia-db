@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertProductSchema, insertCategorySchema, insertSaleSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { seedDatabase } from "../db/init";
 
 // Session augmentation
 declare module 'express-session' {
@@ -495,6 +496,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete task error:", error);
       res.status(500).json({ error: "Erro ao deletar tarefa" });
+    }
+  });
+
+  // ==================== ADMIN ROUTES (Sistema) ====================
+  
+  // Rota para forçar inicialização do banco (apenas em produção, sem autenticação para permitir setup inicial)
+  app.post("/api/admin/force-seed", async (req: Request, res: Response) => {
+    try {
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Verificar se há usuários no banco
+      const users = await storage.getAllUsers();
+      
+      if (users.length > 0) {
+        return res.status(400).json({ 
+          error: "Banco de dados já contém usuários",
+          message: "Para segurança, esta operação só pode ser executada em um banco vazio. Use a interface de administração para gerenciar usuários.",
+          userCount: users.length
+        });
+      }
+
+      console.log(`🔧 ADMIN: Forçando inicialização do banco (${isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'})...`);
+      
+      await seedDatabase();
+      
+      res.json({ 
+        success: true,
+        message: "Banco de dados inicializado com sucesso! Você pode fazer login com: admin/senha123"
+      });
+    } catch (error) {
+      console.error("Force seed error:", error);
+      res.status(500).json({ 
+        error: "Erro ao inicializar banco de dados",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
