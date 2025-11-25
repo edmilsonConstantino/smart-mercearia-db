@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Product } from '@/lib/types';
 
@@ -19,6 +19,10 @@ export default function POS() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
+  const [weightOpen, setWeightOpen] = useState(false);
+  const [selectedWeightProduct, setSelectedWeightProduct] = useState<Product | null>(null);
+  const [weightInGrams, setWeightInGrams] = useState(0);
+  
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [activeDiscount, setActiveDiscount] = useState({ type: 'none', value: 0 }); // applied discount
@@ -57,16 +61,27 @@ export default function POS() {
     const item = cart.find(i => i.productId === productId);
     if (!item) return;
     
-    const newQuantity = item.quantity + change;
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    // Logic for KG items: if change is small (+-1), maybe we want to open modal? 
+    // For now, keep simple +/- 1 if not 'kg', but if 'kg', maybe adjust by 0.1?
+    // Let's stick to simple increment for 'un', but for 'kg' use 0.1 steps or just rely on the modal.
+    // Actually user asked for grams input.
+    
+    let step = 1;
+    if (product.unit === 'kg') step = 0.1;
+
+    const newQuantity = Math.max(0, Number((item.quantity + (change * step)).toFixed(3)));
+    
     if (newQuantity <= 0) {
       removeFromCart(productId);
     } else {
       // Check stock limit for addition
       if (change > 0) {
-        const product = products.find(p => p.id === productId);
-        if (product && product.stock < newQuantity) {
-          // Notification handled by store roughly, but let's just block here silently or rely on store toast
-          return; 
+        if (product.stock < newQuantity) {
+           // Stock limit reached
+           return;
         }
       }
       dispatch({ 
@@ -77,16 +92,27 @@ export default function POS() {
   };
 
   const handleAddProduct = (product: Product) => {
-    // For KG products, maybe show a modal to ask for weight? 
-    // For now, just add 1 unit/kg and let user adjust. Or implement the "smart" 0.5kg logic later.
-    // User asked for "possibilidade de vender menos de 1kg".
-    // Let's make it simple: add 1, user can edit to 0.5 in cart if needed, OR better:
-    // If unit is kg, maybe add 1 but allow decimal input in cart.
-    addToCart(product, 1);
+    if (product.unit === 'kg') {
+      setSelectedWeightProduct(product);
+      setWeightInGrams(0);
+      setWeightOpen(true);
+    } else {
+      addToCart(product, 1);
+    }
   };
 
-  const handleCheckout = (method: 'cash' | 'card' | 'pix') => {
-    checkout(method);
+  const confirmWeightAdd = () => {
+    if (selectedWeightProduct && weightInGrams > 0) {
+      const quantityInKg = weightInGrams / 1000;
+      addToCart(selectedWeightProduct, quantityInKg);
+      setWeightOpen(false);
+      setSelectedWeightProduct(null);
+      setWeightInGrams(0);
+    }
+  };
+
+  const handleCheckout = (method: 'cash' | 'card' | 'pix' | 'mpesa' | 'emola' | 'pos' | 'bank') => {
+    checkout(method as any); // Type casting for new methods
     setCheckoutOpen(false);
     setActiveDiscount({ type: 'none', value: 0 });
   };
@@ -153,6 +179,11 @@ export default function POS() {
                         ESGOTADO
                       </div>
                     )}
+                    {product.unit === 'kg' && (
+                      <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] bg-white/90 backdrop-blur text-foreground border-none shadow-sm">
+                        <Scale className="h-3 w-3 mr-1" /> Pesável
+                      </Badge>
+                    )}
                   </div>
                   <div>
                     <h3 className="font-medium text-sm leading-tight line-clamp-2 h-10">{product.name}</h3>
@@ -161,7 +192,7 @@ export default function POS() {
                       <span className="text-xs text-muted-foreground">/{product.unit}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Estoque: {product.stock} {product.unit}
+                      Estoque: {product.stock.toFixed(product.unit === 'kg' ? 3 : 0)} {product.unit}
                     </div>
                   </div>
                 </CardContent>
@@ -200,7 +231,7 @@ export default function POS() {
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-medium truncate">{product.name}</h4>
                       <div className="text-xs text-muted-foreground">
-                        {formatCurrency(item.priceAtSale)} x {item.quantity}{product.unit}
+                        {formatCurrency(item.priceAtSale)} x {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -212,8 +243,7 @@ export default function POS() {
                         >
                           <Minus className="h-3 w-3" />
                         </button>
-                        {/* Allow manual input for decimals if needed, but for now just display */}
-                        <span className="w-10 text-center text-xs font-medium tabular-nums">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
+                        <span className="w-12 text-center text-xs font-medium tabular-nums">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
                         <button 
                           className="px-2 hover:bg-muted h-full flex items-center"
                           onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
@@ -313,51 +343,136 @@ export default function POS() {
         </div>
       </div>
 
+      {/* Weight Input Modal */}
+      <Dialog open={weightOpen} onOpenChange={setWeightOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Informar Peso (Gramas)</DialogTitle>
+            <DialogDescription>
+              Produto: {selectedWeightProduct?.name} ({formatCurrency(selectedWeightProduct?.price || 0)}/kg)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" onClick={() => setWeightInGrams(100)}>100g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(250)}>250g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(500)}>500g</Button>
+              <Button variant="outline" onClick={() => setWeightInGrams(1000)}>1kg</Button>
+            </div>
+            <div className="grid gap-2">
+              <Label>Peso Manual (g)</Label>
+              <div className="relative">
+                <Input 
+                  type="number" 
+                  value={weightInGrams} 
+                  onChange={(e) => setWeightInGrams(Number(e.target.value))}
+                  className="pr-8"
+                />
+                <span className="absolute right-3 top-2.5 text-sm text-muted-foreground">g</span>
+              </div>
+            </div>
+            <div className="bg-muted/30 p-3 rounded text-center">
+              <p className="text-sm text-muted-foreground">Preço calculado</p>
+              <p className="text-xl font-bold text-primary">
+                {formatCurrency(((selectedWeightProduct?.price || 0) * weightInGrams) / 1000)}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setWeightOpen(false)}>Cancelar</Button>
+             <Button onClick={confirmWeightAdd} disabled={weightInGrams <= 0}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Checkout Modal */}
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-heading font-bold text-center">Finalizar Venda</DialogTitle>
-            <DialogDescription className="text-center">
-              Confirme o valor total e escolha o método de pagamento.
+            <DialogTitle className="text-2xl font-heading font-bold">Finalizar Venda</DialogTitle>
+            <DialogDescription>
+              Revise os itens e escolha o método de pagamento.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-6 text-center space-y-2 bg-muted/30 rounded-lg my-2 border border-dashed border-primary/20">
-            <p className="text-sm text-muted-foreground">Total a pagar</p>
-            <p className="text-4xl font-bold text-primary tracking-tight">{formatCurrency(cartTotal)}</p>
-            <p className="text-xs text-muted-foreground">{cartCount} itens no pedido</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="border rounded-lg p-4 bg-muted/10 h-[300px] overflow-y-auto">
+                <h4 className="font-bold mb-3 flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
+                  <ShoppingBag className="h-4 w-4" /> Resumo do Pedido
+                </h4>
+                <div className="space-y-3">
+                  {cart.map((item, idx) => {
+                    const product = products.find(p => p.id === item.productId);
+                    return (
+                      <div key={idx} className="flex justify-between items-start text-sm border-b border-dashed border-border pb-2 last:border-0">
+                        <div>
+                           <p className="font-medium">{product?.name}</p>
+                           <p className="text-xs text-muted-foreground">
+                             {item.quantity.toFixed(product?.unit === 'kg' ? 3 : 0)}{product?.unit} x {formatCurrency(item.priceAtSale)}
+                           </p>
+                        </div>
+                        <span className="font-bold">{formatCurrency(item.quantity * item.priceAtSale)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-primary/5 rounded-lg border border-primary/10">
+                <span className="font-bold text-lg">Total a Pagar</span>
+                <span className="font-bold text-2xl text-primary">{formatCurrency(cartTotal)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Label>Método de Pagamento</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
+                  onClick={() => handleCheckout('cash')}
+                >
+                  <Banknote className="h-5 w-5" />
+                  Dinheiro
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
+                  onClick={() => handleCheckout('card')}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  Cartão (POS)
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
+                  onClick={() => handleCheckout('pix')}
+                >
+                  <QrCode className="h-5 w-5" />
+                  PIX / M-Pesa
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
+                  onClick={() => handleCheckout('emola')}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  e-Mola
+                </Button>
+                 <Button 
+                  variant="outline" 
+                  className="flex flex-col h-20 gap-1 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
+                  onClick={() => handleCheckout('bank')}
+                >
+                  <Banknote className="h-5 w-5" />
+                  Transf. Bancária
+                </Button>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <Button 
-              variant="outline" 
-              className="flex flex-col h-24 gap-2 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
-              onClick={() => handleCheckout('cash')}
-            >
-              <Banknote className="h-6 w-6" />
-              Dinheiro
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col h-24 gap-2 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
-              onClick={() => handleCheckout('card')}
-            >
-              <CreditCard className="h-6 w-6" />
-              Cartão
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex flex-col h-24 gap-2 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all"
-              onClick={() => handleCheckout('pix')}
-            >
-              <QrCode className="h-6 w-6" />
-              PIX
-            </Button>
-          </div>
-
-          <DialogFooter className="sm:justify-center">
-            <Button variant="ghost" onClick={() => setCheckoutOpen(false)}>Cancelar</Button>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="ghost" onClick={() => setCheckoutOpen(false)}>Voltar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
