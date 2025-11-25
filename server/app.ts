@@ -18,11 +18,25 @@ export function log(message: string, source = "express") {
 
 export const app = express();
 
+// Flag para indicar se o servidor está completamente pronto
+let isAppReady = false;
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
   }
 }
+// Middleware de readiness check - responde 503 se app não estiver pronto
+app.use((req, res, next) => {
+  if (!isAppReady && !req.path.startsWith('/health')) {
+    return res.status(503).json({ 
+      error: 'Service Unavailable', 
+      message: 'Application is initializing. Please try again in a moment.' 
+    });
+  }
+  next();
+});
+
 app.use(express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;
@@ -76,33 +90,101 @@ app.use((req, res, next) => {
 export default async function runApp(
   setup: (app: Express, server: Server) => Promise<void>,
 ) {
-  // Inicializar banco de dados com dados padrão se estiver vazio
-  await initializeDatabase();
+  let server: Server;
+  const port = parseInt(process.env.PORT || '5000', 10);
   
-  const server = await registerRoutes(app);
+  // PHASE 1: Fatal bootstrap - env/DB/routes (fail-fast required)
+  try {
+    // Verificar variável de ambiente essencial
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
 
+    // Inicializar banco de dados com dados padrão se estiver vazio
+    log('Initializing database...');
+    await initializeDatabase();
+    log('Database initialization complete');
+    
+    // Registrar rotas
+    log('Registering routes...');
+    server = await registerRoutes(app);
+    
+    // Validar que server foi criado
+    if (!server) {
+      throw new Error('registerRoutes did not return a server instance');
+    }
+    log('Routes registered');
+  } catch (error) {
+    console.error('❌ FATAL: Server bootstrap failed');
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
+    console.error('\n⚠️  Deployment cannot proceed. Fix the above error and redeploy.\n');
+    process.exit(1);
+  }
+
+  // Middleware de erro para requests - não deve crashar o servidor
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
+    
+    // Log completo do erro incluindo stack trace
+    console.error('Request error:', err.message || err);
+    if (err instanceof Error && err.stack) {
+      console.error('Stack trace:', err.stack);
+    }
+    
     res.status(status).json({ message });
-    throw err;
   });
 
-  // importantly run the final setup after setting up all the other routes so
-  // the catch-all route doesn't interfere with the other routes
-  await setup(app, server);
+  // Handler de erros do servidor (apenas bind errors são fatais)
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ FATAL: Port ${port} is already in use`);
+      process.exit(1);
+    } else if (err.code === 'EACCES') {
+      console.error(`❌ FATAL: Port ${port} requires elevated privileges`);
+      process.exit(1);
+    } else {
+      // Outros erros apenas logar
+      console.error('⚠️  Server error (non-fatal):', err);
+    }
+  });
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  // Health check endpoint (sempre disponível)
+  app.get('/health', (_req, res) => {
+    res.json({ 
+      status: isAppReady ? 'ready' : 'initializing',
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Iniciar o servidor na porta e host corretos
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  }, async () => {
+    log(`✓ Server listening on 0.0.0.0:${port}`);
+    log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // PHASE 2: Setup (Vite/static) - após servidor estar rodando
+    try {
+      log('Running setup (Vite/static serve)...');
+      await setup(app, server);
+      isAppReady = true;
+      log('✅ Setup complete - application ready');
+    } catch (error) {
+      console.error('❌ ERROR: Setup failed after server started');
+      console.error('Error:', error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.stack) {
+        console.error('Stack trace:', error.stack);
+      }
+      console.error('\n⚠️  Server is running but application setup incomplete.');
+      console.error('⚠️  Responding with 503 to all requests until fixed.');
+      console.error('⚠️  Check logs and redeploy with fixes.\n');
+      // NÃO fazer process.exit - servidor continua respondendo 503
+    }
   });
 }
