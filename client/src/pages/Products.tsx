@@ -104,15 +104,17 @@ export default function Products() {
   const [increaseStockOpen, setIncreaseStockOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [increaseQuantity, setIncreaseQuantity] = useState('');
+  const [increasePrice, setIncreasePrice] = useState('');
 
   const increaseStockMutation = useMutation({
-    mutationFn: ({ id, quantity }: { id: string; quantity: number }) => 
-      productsApi.increaseStock(id, quantity),
+    mutationFn: ({ id, quantity, price }: { id: string; quantity: number; price?: number }) => 
+      productsApi.increaseStock(id, quantity, price),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       setIncreaseStockOpen(false);
       setIncreaseQuantity('');
-      toast({ title: "Sucesso", description: "Estoque aumentado!" });
+      setIncreasePrice('');
+      toast({ title: "Sucesso", description: "Estoque e preço atualizados!" });
     },
     onError: (error: Error) => {
       toast({ 
@@ -574,13 +576,31 @@ export default function Products() {
                                 Estoque atual: {parsedStock} {product.unit}
                               </p>
                             </div>
+                            <div className="grid gap-2">
+                              <Label>Novo Preço (Opcional)</Label>
+                              <Input 
+                                type="number" 
+                                step="0.01"
+                                placeholder={formatCurrency(parseFloat(product.price))}
+                                value={increasePrice}
+                                onChange={(e) => setIncreasePrice(e.target.value)}
+                                data-testid="input-increase-price"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Preço atual: {formatCurrency(parseFloat(product.price))}
+                              </p>
+                            </div>
                             <Button 
-                              onClick={() => increaseStockMutation.mutate({ id: product.id, quantity: parseFloat(increaseQuantity) })}
+                              onClick={() => increaseStockMutation.mutate({ 
+                                id: product.id, 
+                                quantity: parseFloat(increaseQuantity),
+                                price: increasePrice ? parseFloat(increasePrice) : undefined
+                              })}
                               disabled={increaseStockMutation.isPending || !increaseQuantity}
                               className="w-full"
                               data-testid="button-save-increase-stock"
                             >
-                              {increaseStockMutation.isPending ? 'Aumentando...' : 'Aumentar Estoque'}
+                              {increaseStockMutation.isPending ? 'Atualizando...' : 'Aumentar Estoque'}
                             </Button>
                           </div>
                         </DialogContent>

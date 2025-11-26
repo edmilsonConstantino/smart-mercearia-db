@@ -215,11 +215,11 @@ export const productsApi = {
     }
   },
 
-  increaseStock: async (id: string, quantity: number): Promise<Product> => {
+  increaseStock: async (id: string, quantity: number, price?: number): Promise<Product> => {
     const res = await fetch(`${API_BASE}/products/${id}/increase-stock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quantity }),
+      body: JSON.stringify({ quantity, ...(price && { price }) }),
       credentials: 'include'
     });
     if (!res.ok) {

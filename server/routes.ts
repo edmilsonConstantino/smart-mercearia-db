@@ -355,7 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Increase product stock (admin/manager only)
   app.post("/api/products/:id/increase-stock", requireAuth, requireAdminOrManager, async (req: Request, res: Response) => {
     try {
-      const { quantity } = req.body;
+      const { quantity, price } = req.body;
       
       if (!quantity || quantity <= 0) {
         return res.status(400).json({ error: "Quantidade deve ser maior que 0" });
@@ -367,7 +367,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const newStock = parseFloat(product.stock) + parseFloat(String(quantity));
-      const updated = await storage.updateProduct(req.params.id, { stock: String(newStock) });
+      const updateData: any = { stock: String(newStock) };
+      if (price !== undefined && price > 0) {
+        updateData.price = String(price);
+      }
+      const updated = await storage.updateProduct(req.params.id, updateData);
 
       // Audit log
       await storage.createAuditLog({
@@ -379,15 +383,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productName: product.name,
           quantityAdded: quantity,
           previousStock: product.stock,
-          newStock: String(newStock)
+          newStock: String(newStock),
+          ...(price && { priceChanged: true, previousPrice: product.price, newPrice: String(price) })
         }
       });
 
       // Notify all users
+      const priceMsg = price ? ` | Preço: ${product.price} → ${price}` : '';
       await storage.createNotification({
         userId: null,
         type: "info",
-        message: `Estoque aumentado: ${product.name} (+${quantity} ${product.unit})`,
+        message: `Estoque aumentado: ${product.name} (+${quantity} ${product.unit})${priceMsg}`,
         metadata: { productId: product.id, action: "stock_increased" }
       });
 

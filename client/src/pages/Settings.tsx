@@ -139,7 +139,7 @@ export default function SettingsPage() {
     
     const matchesFilter = actionFilter === 'all' || log.action.includes(actionFilter.toUpperCase());
     
-    const matchesUserFilter = userFilter === '' || log.userId === userFilter;
+    const matchesUserFilter = userFilter === '0' || userFilter === '' || log.userId === userFilter;
     
     return matchesSearch && matchesFilter && matchesUserFilter;
   });
@@ -568,7 +568,7 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Filtrar por usuário" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos Usuários</SelectItem>
+                    <SelectItem value="0">Todos Usuários</SelectItem>
                     {users.map(u => (
                       <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                     ))}
