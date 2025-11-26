@@ -10,7 +10,8 @@ import {
   CheckSquare, 
   LogOut, 
   Store,
-  X
+  X,
+  Boxes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -69,6 +70,12 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
       label: 'Produtos', 
       href: '/products', 
       icon: Package,
+      roles: ['admin', 'manager'] 
+    },
+    { 
+      label: 'Pedidos', 
+      href: '/orders', 
+      icon: Boxes,
       roles: ['admin', 'manager'] 
     },
     { 

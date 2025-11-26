@@ -9,7 +9,8 @@ import {
   Settings, 
   CheckSquare, 
   LogOut, 
-  Store
+  Store,
+  Boxes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
@@ -56,6 +57,12 @@ export function Sidebar() {
       label: 'Produtos', 
       href: '/products', 
       icon: Package,
+      roles: ['admin', 'manager'] 
+    },
+    { 
+      label: 'Pedidos', 
+      href: '/orders', 
+      icon: Boxes,
       roles: ['admin', 'manager'] 
     },
     { 

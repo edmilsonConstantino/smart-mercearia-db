@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Package, Phone, User, Plus, Minus, Check, Clock, X, Store } from 'lucide-react';
+import { ShoppingCart, Package, Phone, User, Plus, Minus, Check, Clock, X, Store, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -216,8 +217,64 @@ export default function ClientOrders() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-500/10 via-orange-500/5 to-emerald-500/10 p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <>
+      {/* Modal para produtos pesáveis */}
+      <Dialog open={weighableModalOpen} onOpenChange={setWeighableModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quantidade em Gramas</DialogTitle>
+          </DialogHeader>
+          {selectedWeighableProduct && (
+            <div className="space-y-6">
+              <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                <p className="font-semibold text-lg">{selectedWeighableProduct.name}</p>
+                <p className="text-sm text-muted-foreground mt-1">Preço: {formatCurrency(parseFloat(selectedWeighableProduct.price))}/kg</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Quantidade (gramas)</Label>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeighableQuantity(Math.max(100, weighableQuantity - 100))}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    value={weighableQuantity}
+                    onChange={(e) => setWeighableQuantity(Math.max(100, parseInt(e.target.value) || 100))}
+                    className="text-center text-lg font-semibold border-emerald-200"
+                    min="100"
+                    step="100"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeighableQuantity(weighableQuantity + 100)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  = {(weighableQuantity / 1000).toFixed(2)} kg
+                </p>
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 flex gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-900">Preço total: {formatCurrency((parseFloat(selectedWeighableProduct.price) / 1000) * weighableQuantity)}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setWeighableModalOpen(false)}>Cancelar</Button>
+            <Button onClick={addWeighableToCart} className="bg-emerald-500 hover:bg-emerald-600">Adicionar ao Carrinho</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="min-h-screen bg-gradient-to-br from-emerald-500/10 via-orange-500/5 to-emerald-500/10 p-4">
+        <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
@@ -320,9 +377,9 @@ export default function ClientOrders() {
         )}
 
         {step === 'browse' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {/* Products */}
-            <div className="lg:col-span-3 space-y-4">
+            <div className="md:col-span-2 lg:col-span-3 space-y-4">
               {/* Category Filter */}
               <Card className="border-emerald-200">
                 <CardContent className="pt-6">
@@ -384,7 +441,7 @@ export default function ClientOrders() {
             </div>
 
             {/* Cart Sidebar */}
-            <Card className="h-fit border-emerald-200 shadow-lg sticky top-4">
+            <Card className="h-fit border-emerald-200 shadow-lg sticky top-4 md:col-span-1">
               <CardHeader className="pb-3 border-b border-emerald-100">
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5 text-emerald-600" />
@@ -622,5 +679,6 @@ export default function ClientOrders() {
         )}
       </div>
     </div>
+    </>
   );
 }
