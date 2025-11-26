@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import { Check, X, Clock, AlertTriangle } from 'lucide-react';
+import { Check, X, Clock, AlertTriangle, RotateCcw, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 interface Order {
@@ -22,6 +24,7 @@ interface Order {
 export default function Orders() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchCode, setSearchCode] = useState('');
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['/api/orders'],
@@ -68,6 +71,27 @@ export default function Orders() {
     }
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await fetch(`/api/orders/${orderId}/reopen`, {
+        method: 'PATCH',
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || error.error || 'Erro ao reabrir pedido');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({ title: 'Sucesso', description: 'Pedido reaberto!' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    }
+  });
+
   const getStatusColor = (status: string, hasOverstock: boolean) => {
     if (hasOverstock) return 'bg-red-100 text-red-800';
     if (status === 'approved') return 'bg-green-100 text-green-800';
@@ -75,9 +99,13 @@ export default function Orders() {
     return 'bg-yellow-100 text-yellow-800';
   };
 
-  const pendingOrders = orders.filter((o: any) => o.status === 'pending');
-  const approvedOrders = orders.filter((o: any) => o.status === 'approved');
-  const cancelledOrders = orders.filter((o: any) => o.status === 'cancelled');
+  const filteredOrders = searchCode 
+    ? orders.filter((o: any) => o.orderCode.includes(searchCode.toUpperCase()))
+    : orders;
+
+  const pendingOrders = filteredOrders.filter((o: any) => o.status === 'pending');
+  const approvedOrders = filteredOrders.filter((o: any) => o.status === 'approved');
+  const cancelledOrders = filteredOrders.filter((o: any) => o.status === 'cancelled');
 
   if (isLoading) {
     return (
@@ -96,6 +124,31 @@ export default function Orders() {
         <h1 className="text-3xl font-bold">Gerenciar Pedidos</h1>
         <p className="text-muted-foreground">Aprovar, revisar e acompanhar pedidos dos clientes</p>
       </div>
+
+      {/* Search Bar */}
+      <Card className="border-emerald-200">
+        <CardContent className="pt-6">
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por código do pedido (ex: ABC1234)..."
+                value={searchCode}
+                onChange={(e) => setSearchCode(e.target.value)}
+                className="pl-10 border-emerald-200"
+              />
+            </div>
+            {searchCode && (
+              <Button
+                variant="outline"
+                onClick={() => setSearchCode('')}
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pedidos Pendentes */}
       <Card className="border-yellow-200 bg-yellow-50/30">

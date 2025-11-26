@@ -807,6 +807,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/orders/:id/reopen", requireAuth, requireAdminOrManager, async (req: Request, res: Response) => {
+    try {
+      const isAdmin = req.session.role === 'admin';
+      
+      // Se não é admin, verificar limite de 5 reabertas/dia
+      if (!isAdmin) {
+        const today = new Date().toISOString().split('T')[0];
+        const reopensToday = await storage.getReopensToday(req.session.userId!, today);
+        
+        if (reopensToday >= 5) {
+          return res.status(403).json({ 
+            error: "Limite de reabertas atingido",
+            message: "Você atingiu o limite de 5 reabertas por dia. Apenas admins podem reabrir sem limites."
+          });
+        }
+      }
+
+      const updated = await storage.reopenOrder(req.params.id);
+      if (!updated) return res.status(404).json({ error: "Pedido não encontrado" });
+      
+      // Registrar reabertura
+      const today = new Date().toISOString().split('T')[0];
+      await storage.trackReopen({
+        orderId: req.params.id,
+        userId: req.session.userId!,
+        date: today
+      });
+
+      await storage.createNotification({
+        userId: null,
+        type: "info",
+        message: `🔄 Pedido ${updated.orderCode} foi reaberto para aprovação`,
+        metadata: { orderId: updated.id }
+      });
+
+      await storage.createAuditLog({
+        userId: req.session.userId!,
+        action: "REOPEN_ORDER",
+        entityType: "order",
+        entityId: updated.id,
+        details: { orderCode: updated.orderCode }
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Reopen order error:", error);
+      res.status(500).json({ error: "Erro ao reabrir pedido" });
+    }
+  });
+
   // ==================== ADMIN ROUTES (Sistema) ====================
   
   // Verifica se banco está vazio (para setup initial)
