@@ -34,7 +34,8 @@ interface OrderData {
 
 export default function ClientOrders() {
   const [location, setLocation] = useLocation();
-  const [step, setStep] = useState<'browse' | 'checkout' | 'tracking'>('browse');
+  const [step, setStep] = useState<'intro' | 'browse' | 'checkout' | 'tracking'>('intro');
+  const [mode, setMode] = useState<'view' | 'order' | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [trackingCode, setTrackingCode] = useState('');
   const [order, setOrder] = useState<OrderData | null>(null);
@@ -179,9 +180,99 @@ export default function ClientOrders() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">M007System</h1>
-            <p className="text-sm text-muted-foreground">Faça seu pedido online</p>
+            <p className="text-sm text-muted-foreground">Consulte produtos e faça reservas</p>
           </div>
         </div>
+
+        {step === 'intro' && (
+          <div className="space-y-4">
+            {/* Como Funciona */}
+            <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-orange-50">
+              <CardHeader>
+                <CardTitle className="text-2xl">Como Funciona o M007System?</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 shrink-0">1</div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Consulte Produtos</h3>
+                        <p className="text-sm text-muted-foreground">Veja todos os produtos disponíveis, preços e estoque.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-600 shrink-0">2</div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Faça uma Reserva</h3>
+                        <p className="text-sm text-muted-foreground">Adicione produtos ao carrinho e faça sua reserva.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center font-bold text-yellow-600 shrink-0">3</div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Aguarde Aprovação</h3>
+                        <p className="text-sm text-muted-foreground">Seu pedido fica pendente. O gerente aprovará ou cancelará.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-600 shrink-0">4</div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Rastreie Online</h3>
+                        <p className="text-sm text-muted-foreground">Use seu código para acompanhar o status da reserva.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-emerald-200">
+                  <p className="text-sm text-gray-700">
+                    💡 <strong>Dica:</strong> Você pode consultar todos os produtos disponíveis sem compromisso, ou fazer uma reserva com seu nome e telefone. Escolha uma das opções abaixo para começar!
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Button
+                    onClick={() => { setStep('browse'); setMode('view'); }}
+                    variant="outline"
+                    className="h-12 text-base border-2 border-blue-300 text-blue-600 hover:bg-blue-50"
+                  >
+                    👀 Apenas Consultar
+                  </Button>
+                  <Button
+                    onClick={() => { setStep('browse'); setMode('order'); }}
+                    className="h-12 text-base bg-emerald-500 hover:bg-emerald-600"
+                  >
+                    🛒 Fazer uma Reserva
+                  </Button>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Input
+                    placeholder="Digite seu código de rastreamento..."
+                    value={trackingCode}
+                    onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+                    className="border-emerald-200"
+                    maxLength={8}
+                  />
+                  <Button
+                    onClick={() => trackOrderMutation.mutate()}
+                    disabled={trackOrderMutation.isPending}
+                    className="bg-emerald-500 hover:bg-emerald-600"
+                  >
+                    Rastrear
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {step === 'browse' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -226,14 +317,21 @@ export default function ClientOrders() {
                           {parseFloat(product.stock) > 0 ? `${product.stock} disponível` : 'Fora de estoque'}
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => addToCart(product)}
-                        disabled={parseFloat(product.stock) === 0}
-                        className="w-full bg-emerald-500 hover:bg-emerald-600 gap-2"
-                      >
-                        <ShoppingCart className="h-4 w-4" />
-                        Adicionar
-                      </Button>
+                      {mode === 'order' && (
+                        <Button 
+                          onClick={() => addToCart(product)}
+                          disabled={parseFloat(product.stock) === 0}
+                          className="w-full bg-emerald-500 hover:bg-emerald-600 gap-2"
+                        >
+                          <ShoppingCart className="h-4 w-4" />
+                          Adicionar ao Carrinho
+                        </Button>
+                      )}
+                      {mode === 'view' && (
+                        <div className="text-xs text-center text-muted-foreground p-2 bg-blue-50 rounded">
+                          👀 Modo Consulta
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
