@@ -41,6 +41,9 @@ export default function ClientOrders() {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [formData, setFormData] = useState({ customerName: '', customerPhone: '', paymentMethod: 'cash' as const });
   const [selectedCategory, setSelectedCategory] = useState('0');
+  const [weighableModalOpen, setWeighableModalOpen] = useState(false);
+  const [selectedWeighableProduct, setSelectedWeighableProduct] = useState<Product | null>(null);
+  const [weighableQuantity, setWeighableQuantity] = useState(100);
 
   // Fetch products and categories
   const { data: productsData = [] } = useQuery({
@@ -125,6 +128,14 @@ export default function ClientOrders() {
   const total = cart.reduce((sum, item) => sum + (item.priceAtSale * item.quantity), 0);
 
   const addToCart = (product: Product) => {
+    // Para produtos pesáveis (kg, g), abrir modal ao invés de adicionar direto
+    if (product.unit === 'kg' || product.unit === 'g') {
+      setSelectedWeighableProduct(product);
+      setWeighableQuantity(100);
+      setWeighableModalOpen(true);
+      return;
+    }
+
     const existing = cart.find(item => item.productId === product.id);
     if (existing) {
       existing.quantity += 1;
@@ -140,6 +151,28 @@ export default function ClientOrders() {
     toast({ title: 'Adicionado!', description: `${product.name} foi adicionado ao carrinho` });
   };
 
+  const addWeighableToCart = () => {
+    if (!selectedWeighableProduct) return;
+    const pricePerGram = parseFloat(selectedWeighableProduct.price) / 1000;
+    const totalPrice = pricePerGram * weighableQuantity;
+    
+    const existing = cart.find(item => item.productId === selectedWeighableProduct.id);
+    if (existing) {
+      existing.quantity += weighableQuantity;
+      setCart([...cart]);
+    } else {
+      setCart([...cart, {
+        productId: selectedWeighableProduct.id,
+        product: selectedWeighableProduct,
+        quantity: weighableQuantity,
+        priceAtSale: totalPrice / weighableQuantity
+      }]);
+    }
+    toast({ title: 'Adicionado!', description: `${selectedWeighableProduct.name} foi adicionado ao carrinho` });
+    setWeighableModalOpen(false);
+    setSelectedWeighableProduct(null);
+  };
+
   const removeFromCart = (productId: string) => {
     setCart(cart.filter(item => item.productId !== productId));
   };
@@ -147,9 +180,21 @@ export default function ClientOrders() {
   const updateQuantity = (productId: string, quantity: number) => {
     const item = cart.find(i => i.productId === productId);
     if (item) {
-      item.quantity = Math.max(0.1, Math.max(1, quantity));
+      if (item.product && (item.product.unit === 'kg' || item.product.unit === 'g')) {
+        item.quantity = Math.max(100, quantity);
+      } else {
+        item.quantity = Math.max(1, quantity);
+      }
       setCart([...cart]);
     }
+  };
+
+  const formatQuantityDisplay = (item: CartItem) => {
+    if (item.product && (item.product.unit === 'kg' || item.product.unit === 'g')) {
+      const kg = item.quantity / 1000;
+      return kg >= 1 ? `${kg.toFixed(2)} kg` : `${item.quantity} g`;
+    }
+    return `${item.quantity}x`;
   };
 
   const getStatusColor = (status?: string) => {
@@ -369,16 +414,16 @@ export default function ClientOrders() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                              onClick={() => updateQuantity(item.productId, item.quantity - (item.product?.unit === 'kg' || item.product?.unit === 'g' ? 100 : 1))}
                               className="h-6 w-6"
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
-                            <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
+                            <span className="text-sm font-medium w-12 text-center">{formatQuantityDisplay(item)}</span>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                              onClick={() => updateQuantity(item.productId, item.quantity + (item.product?.unit === 'kg' || item.product?.unit === 'g' ? 100 : 1))}
                               className="h-6 w-6"
                             >
                               <Plus className="h-3 w-3" />
