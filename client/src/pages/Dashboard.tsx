@@ -11,11 +11,13 @@ import {
   Calendar,
   Users,
   Activity,
-  Zap
+  Zap,
+  Star,
+  Bell
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { formatCurrency } from '@/lib/utils';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, Cell } from 'recharts';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
@@ -54,6 +56,32 @@ export default function Dashboard() {
 
   const lowStockCount = products.filter(p => parseFloat(p.stock) <= parseFloat(p.minStock)).length;
   const activeUsers = users.length;
+
+  // Top 5 produtos mais vendidos
+  const topProducts = sales
+    .flatMap(s => s.items)
+    .reduce((acc, item) => {
+      const existing = acc.find(p => p.productId === item.productId);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.revenue += item.priceAtSale * item.quantity;
+      } else {
+        acc.push({ productId: item.productId, quantity: item.quantity, revenue: item.priceAtSale * item.quantity });
+      }
+      return acc;
+    }, [] as any[])
+    .map(item => {
+      const product = products.find(p => p.id === item.productId);
+      return { ...item, name: product?.name || 'Desconhecido', ...item };
+    })
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
+
+  // Produtos com alerta de estoque baixo
+  const lowStockProducts = products
+    .filter(p => parseFloat(p.stock) <= parseFloat(p.minStock))
+    .sort((a, b) => parseFloat(a.stock) - parseFloat(b.stock))
+    .slice(0, 5);
 
   const chartData = Array.from({ length: 7 }).map((_, i) => {
     const date = subDays(new Date(), 6 - i);
@@ -179,6 +207,65 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-2">
               Usuários cadastrados
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="border-none shadow-xl bg-gradient-to-br from-white to-red-50/30">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <Bell className="h-5 w-5 text-red-500" />
+              ⚠️ Produtos com Alerta
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {lowStockProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum alerta de estoque</p>
+              ) : (
+                lowStockProducts.map(p => (
+                  <div key={p.id} className="flex justify-between items-start p-2 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{p.name}</p>
+                      <p className="text-xs text-red-600 font-bold">
+                        {parseFloat(p.stock)} {p.unit} (min: {parseFloat(p.minStock)})
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold">REORDENAR</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <Star className="h-5 w-5 text-yellow-500" />
+              Top 5 Produtos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {topProducts.map((p, idx) => (
+                <div key={p.productId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="font-bold text-lg text-primary/60">#{idx + 1}</span>
+                    <div>
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{p.quantity} vendas</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-600">{formatCurrency(p.revenue)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>

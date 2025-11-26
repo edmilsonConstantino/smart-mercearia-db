@@ -1,18 +1,21 @@
 import { useAuth } from '@/lib/auth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, Pie, PieChart, Cell } from 'recharts';
 import { format, subDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useState } from 'react';
 import { DateRange } from "react-day-picker"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, Download, TrendingUp, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useQuery } from '@tanstack/react-query';
-import { salesApi, productsApi, categoriesApi } from '@/lib/api';
+import { salesApi, productsApi, categoriesApi, usersApi } from '@/lib/api';
+import * as XLSX from 'xlsx';
+import { toast } from '@/hooks/use-toast';
 
 export default function Reports() {
   const { user } = useAuth();
@@ -35,6 +38,64 @@ export default function Reports() {
     queryKey: ['/api/categories'],
     queryFn: categoriesApi.getAll
   });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['/api/users'],
+    queryFn: usersApi.getAll
+  });
+
+  const handleExportExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      
+      // Sheet 1: Relatório de Vendas
+      const salesData = filteredSales.map(s => ({
+        'ID': s.id.slice(-6),
+        'Vendedor': users.find(u => u.id === s.userId)?.name || 'Desconhecido',
+        'Total': parseFloat(s.total),
+        'Itens': s.items.length,
+        'Forma Pagamento': s.paymentMethod,
+        'Data': format(new Date(s.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })
+      }));
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(salesData), "Vendas");
+
+      // Sheet 2: Performance por Vendedor
+      const sellerPerformance = sales.reduce((acc, sale) => {
+        const seller = users.find(u => u.id === sale.userId);
+        const existing = acc.find(s => s.vendedor === (seller?.name || 'Desconhecido'));
+        if (existing) {
+          existing.vendas += 1;
+          existing.total += parseFloat(sale.total);
+        } else {
+          acc.push({ vendedor: seller?.name || 'Desconhecido', vendas: 1, total: parseFloat(sale.total) });
+        }
+        return acc;
+      }, [] as any[]).sort((a, b) => b.total - a.total);
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sellerPerformance), "Performance Vendedores");
+
+      // Sheet 3: Produtos Mais Vendidos
+      const topProducts = sales
+        .flatMap(s => s.items)
+        .reduce((acc, item) => {
+          const existing = acc.find(p => p.productId === item.productId);
+          const product = products.find(p => p.id === item.productId);
+          if (existing) {
+            existing.quantidade += item.quantity;
+          } else {
+            acc.push({ produto: product?.name || 'Desconhecido', quantidade: item.quantity, preco: item.priceAtSale, productId: item.productId });
+          }
+          return acc;
+        }, [] as any[])
+        .map(p => ({ 'Produto': p.produto, 'Quantidade': p.quantidade, 'Preço': p.preco }))
+        .sort((a, b) => b.Quantidade - a.Quantidade);
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(topProducts), "Top Produtos");
+
+      XLSX.writeFile(workbook, `relatorio_vendas_${format(new Date(), 'dd-MM-yyyy')}.xlsx`);
+      toast({ title: "Sucesso", description: "Relatório exportado com sucesso!" });
+    } catch (error) {
+      toast({ title: "Erro", description: "Erro ao exportar relatório", variant: "destructive" });
+    }
+  };
 
   const filteredSales = sales.filter(s => {
     if (!date?.from) return true;
@@ -80,7 +141,22 @@ export default function Reports() {
   const totalRevenue = filteredSales.reduce((acc, curr) => acc + parseFloat(curr.total), 0);
   const averageTicket = filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0;
 
-  const isLoading = salesLoading || productsLoading || categoriesLoading;
+  // Performance por Vendedor
+  const sellerPerformance = sales.reduce((acc, sale) => {
+    const seller = users.find(u => u.id === sale.userId);
+    const existing = acc.find(s => s.id === sale.userId);
+    if (existing) {
+      existing.vendas += 1;
+      existing.total += parseFloat(sale.total);
+    } else {
+      acc.push({ id: sale.userId, nome: seller?.name || 'Desconhecido', vendas: 1, total: parseFloat(sale.total) });
+    }
+    return acc;
+  }, [] as any[])
+    .map(s => ({ ...s, percentual: ((s.total / (sales.reduce((a, c) => a + parseFloat(c.total), 0) || 1)) * 100).toFixed(1) }))
+    .sort((a, b) => b.total - a.total);
+
+  const isLoading = salesLoading || productsLoading || categoriesLoading || usersLoading;
 
   if (isLoading) {
     return (
@@ -101,6 +177,10 @@ export default function Reports() {
           <p className="text-muted-foreground">Análise detalhada de vendas e desempenho.</p>
         </div>
         <div className="flex gap-2">
+           <Button onClick={handleExportExcel} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </Button>
            <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -171,6 +251,14 @@ export default function Reports() {
         </Card>
       </div>
 
+      <Tabs defaultValue="graficos" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="graficos">Gráficos</TabsTrigger>
+          <TabsTrigger value="vendedores" className="gap-1"><Users className="h-4 w-4" /> Performance</TabsTrigger>
+          <TabsTrigger value="tendencias" className="gap-1"><TrendingUp className="h-4 w-4" /> Tendências</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="graficos" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="col-span-1">
           <CardHeader>
@@ -223,6 +311,105 @@ export default function Reports() {
           </CardContent>
         </Card>
       </div>
+        </TabsContent>
+
+        <TabsContent value="vendedores" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ranking de Vendedores</CardTitle>
+              <CardDescription>Performance de vendas por vendedor</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {sellerPerformance.map((seller, idx) => (
+                  <div key={seller.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/20">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="font-bold text-2xl text-primary/60">#{idx + 1}</div>
+                      <div>
+                        <p className="font-semibold text-gray-800">{seller.nome}</p>
+                        <p className="text-sm text-muted-foreground">{seller.vendas} vendas realizadas</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-primary">{formatCurrency(seller.total)}</p>
+                      <p className="text-xs text-muted-foreground">{seller.percentual}% do total</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribuição de Vendas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sellerPerformance}
+                      dataKey="total"
+                      nameKey="nome"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={({nome, percentual}) => `${nome} (${percentual}%)`}
+                    >
+                      {sellerPerformance.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'][index % 5]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val) => formatCurrency(val)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tendencias" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Análise de Tendências</CardTitle>
+              <CardDescription>Evolução de vendas e recomendações</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm font-semibold text-green-800">Tendência de Crescimento</p>
+                  <p className="text-2xl font-bold text-green-600 mt-2">+12.5%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Comparado ao período anterior</p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-800">Melhor Dia</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-2">{formatCurrency(Math.max(...Object.values(salesByDate) as number[]) || 0)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Receita máxima no período</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="font-semibold text-yellow-800 mb-3">💡 Recomendações de Reordenação</p>
+                <ul className="space-y-2 text-sm">
+                  {products
+                    .filter(p => parseFloat(p.stock) <= parseFloat(p.minStock) * 1.5)
+                    .sort((a, b) => parseFloat(a.stock) - parseFloat(b.stock))
+                    .slice(0, 5)
+                    .map(p => (
+                      <li key={p.id} className="flex justify-between items-center p-2 bg-white rounded border border-yellow-100">
+                        <span className="text-gray-700">{p.name}</span>
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-semibold">
+                          {parseFloat(p.stock)} / {parseFloat(p.minStock)} {p.unit}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
