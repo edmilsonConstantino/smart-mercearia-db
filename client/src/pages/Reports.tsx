@@ -356,11 +356,8 @@ export default function Reports() {
                       cy="50%"
                       outerRadius={100}
                       label={({nome, percentual}) => `${nome} (${percentual}%)`}
-                    >
-                      {sellerPerformance.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'][index % 5]} />
-                      ))}
-                    </Pie>
+                      colors={['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6']}
+                    />
                     <Tooltip formatter={(val) => formatCurrency(val)} />
                   </PieChart>
                 </ResponsiveContainer>
