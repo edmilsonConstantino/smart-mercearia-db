@@ -59,6 +59,11 @@ export default function SettingsPage() {
     role: 'seller' as 'admin' | 'manager' | 'seller'
   });
 
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [userFilter, setUserFilter] = useState('');
+
   const createUserMutation = useMutation({
     mutationFn: usersApi.create,
     onSuccess: () => {
@@ -66,6 +71,39 @@ export default function SettingsPage() {
       setIsAddUserOpen(false);
       setNewUser({ username: '', name: '', password: '', role: 'seller' });
       toast({ title: "Sucesso", description: "Usuário criado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => usersApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setIsEditOpen(false);
+      setEditingUser(null);
+      toast({ title: "Sucesso", description: "Usuário atualizado com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro", 
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: usersApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setDeletingUserId(null);
+      toast({ title: "Sucesso", description: "Usuário deletado com sucesso!" });
     },
     onError: (error: Error) => {
       toast({ 
@@ -92,13 +130,18 @@ export default function SettingsPage() {
   const [actionFilter, setActionFilter] = useState<string>('all');
 
   const filteredAuditLogs = auditLogs.filter(log => {
+    const logUser = users.find(u => u.id === log.userId);
     const matchesSearch = log.action.toLowerCase().includes(searchHistory.toLowerCase()) ||
       (log.userId && log.userId.toLowerCase().includes(searchHistory.toLowerCase())) ||
+      (logUser?.name.toLowerCase().includes(searchHistory.toLowerCase())) ||
+      (logUser?.username.toLowerCase().includes(searchHistory.toLowerCase())) ||
       (log.entityId && log.entityId.toLowerCase().includes(searchHistory.toLowerCase()));
     
     const matchesFilter = actionFilter === 'all' || log.action.includes(actionFilter.toUpperCase());
     
-    return matchesSearch && matchesFilter;
+    const matchesUserFilter = userFilter === '' || log.userId === userFilter;
+    
+    return matchesSearch && matchesFilter && matchesUserFilter;
   });
 
   const getActionIcon = (action: string) => {
@@ -288,8 +331,94 @@ export default function SettingsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell><Badge variant="secondary" className="bg-green-100 text-green-800">Ativo</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm"><Lock className="h-4 w-4" /></Button>
+                      <TableCell className="text-right gap-2 flex justify-end">
+                        <Dialog open={isEditOpen && editingUser?.id === u.id} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditingUser(null); }}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => { setEditingUser({...u}); setIsEditOpen(true); }}
+                            data-testid={`button-edit-user-${u.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Editar Usuário: {editingUser?.name}</DialogTitle>
+                            </DialogHeader>
+                            {editingUser && (
+                              <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                  <Label>Nome Completo</Label>
+                                  <Input 
+                                    value={editingUser.name}
+                                    onChange={(e) => setEditingUser({...editingUser, name: e.target.value})}
+                                    data-testid="input-edit-name"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label>Nome de Usuário</Label>
+                                  <Input 
+                                    value={editingUser.username}
+                                    onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
+                                    data-testid="input-edit-username"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label>Nova Senha (deixe em branco para manter)</Label>
+                                  <Input 
+                                    type="password" 
+                                    placeholder="Nova senha"
+                                    onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                                    data-testid="input-edit-password"
+                                  />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label>Função</Label>
+                                  <Select value={editingUser.role} onValueChange={(val) => setEditingUser({...editingUser, role: val})}>
+                                    <SelectTrigger data-testid="select-edit-role">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Administrador</SelectItem>
+                                      <SelectItem value="manager">Gestor</SelectItem>
+                                      <SelectItem value="seller">Vendedor</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            )}
+                            <DialogFooter>
+                              <Button onClick={() => updateUserMutation.mutate({ id: editingUser.id, data: editingUser })} disabled={updateUserMutation.isPending} data-testid="button-save-edit-user">
+                                {updateUserMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Dialog open={deletingUserId === u.id} onOpenChange={(open) => { if (!open) setDeletingUserId(null); }}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletingUserId(u.id)}
+                            data-testid={`button-delete-user-${u.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Confirmar Exclusão</DialogTitle>
+                              <DialogDescription>
+                                Tem certeza que deseja deletar o usuário "{u.name}"? Esta ação não pode ser desfeita.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setDeletingUserId(null)}>Cancelar</Button>
+                              <Button variant="destructive" onClick={() => deleteUserMutation.mutate(u.id)} disabled={deleteUserMutation.isPending} data-testid="button-confirm-delete-user">
+                                {deleteUserMutation.isPending ? 'Deletando...' : 'Deletar'}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -423,15 +552,26 @@ export default function SettingsPage() {
                   />
                 </div>
                 <Select value={actionFilter} onValueChange={setActionFilter}>
-                  <SelectTrigger className="w-full md:w-[200px]">
-                    <SelectValue placeholder="Filtrar por ação" />
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Serviço" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas as Ações</SelectItem>
-                    <SelectItem value="create">Criações</SelectItem>
-                    <SelectItem value="update">Atualizações</SelectItem>
-                    <SelectItem value="delete">Exclusões</SelectItem>
+                    <SelectItem value="all">Todos Serviços</SelectItem>
+                    <SelectItem value="product">Produtos</SelectItem>
+                    <SelectItem value="user">Usuários</SelectItem>
                     <SelectItem value="sale">Vendas</SelectItem>
+                    <SelectItem value="stock">Estoque</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={userFilter} onValueChange={setUserFilter}>
+                  <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="Filtrar por usuário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Todos Usuários</SelectItem>
+                    {users.map(u => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
