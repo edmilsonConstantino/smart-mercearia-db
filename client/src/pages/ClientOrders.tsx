@@ -35,8 +35,8 @@ interface OrderData {
 
 export default function ClientOrders() {
   const [location, setLocation] = useLocation();
-  const [step, setStep] = useState<'intro' | 'browse' | 'checkout' | 'tracking'>('intro');
-  const [mode, setMode] = useState<'view' | 'order' | null>(null);
+  const [step, setStep] = useState<'intro' | 'browse' | 'checkout' | 'tracking'>('browse');
+  const [mode, setMode] = useState<'view' | 'order'>('view');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [trackingCode, setTrackingCode] = useState('');
   const [order, setOrder] = useState<OrderData | null>(null);
@@ -129,15 +129,36 @@ export default function ClientOrders() {
   const total = cart.reduce((sum, item) => sum + (item.priceAtSale * item.quantity), 0);
 
   const addToCart = (product: Product) => {
+    // Se em modo consulta, mudar para reserva
+    if (mode === 'view') {
+      setMode('order');
+      toast({ title: 'Ativado', description: 'Você entrou no modo de reserva' });
+      return;
+    }
+
+    // Validar estoque
+    const maxQty = parseFloat(product.stock);
+    if (maxQty <= 0) {
+      toast({ title: 'Indisponível', description: `${product.name} não tem estoque`, variant: 'destructive' });
+      return;
+    }
+
     // Para produtos pesáveis (kg, g), abrir modal ao invés de adicionar direto
     if (product.unit === 'kg' || product.unit === 'g') {
       setSelectedWeighableProduct(product);
-      setWeighableQuantity(100);
+      setWeighableQuantity(Math.min(100, Math.max(100, maxQty * 1000)));
       setWeighableModalOpen(true);
       return;
     }
 
     const existing = cart.find(item => item.productId === product.id);
+    const totalQty = (existing?.quantity || 0) + 1;
+    
+    if (totalQty > maxQty) {
+      toast({ title: 'Sem estoque', description: `Máximo disponível: ${Math.floor(maxQty)}`, variant: 'destructive' });
+      return;
+    }
+
     if (existing) {
       existing.quantity += 1;
       setCart([...cart]);
@@ -154,10 +175,25 @@ export default function ClientOrders() {
 
   const addWeighableToCart = () => {
     if (!selectedWeighableProduct) return;
+    
+    // Validar estoque em gramas
+    const maxStock = parseFloat(selectedWeighableProduct.stock) * 1000;
+    if (weighableQuantity > maxStock) {
+      toast({ title: 'Estoque insuficiente', description: `Máximo: ${(maxStock / 1000).toFixed(2)} kg`, variant: 'destructive' });
+      return;
+    }
+
     const pricePerGram = parseFloat(selectedWeighableProduct.price) / 1000;
     const totalPrice = pricePerGram * weighableQuantity;
     
     const existing = cart.find(item => item.productId === selectedWeighableProduct.id);
+    const totalQty = (existing?.quantity || 0) + weighableQuantity;
+    
+    if (totalQty > maxStock) {
+      toast({ title: 'Estoque insuficiente', description: `Total: ${(maxStock / 1000).toFixed(2)} kg`, variant: 'destructive' });
+      return;
+    }
+
     if (existing) {
       existing.quantity += weighableQuantity;
       setCart([...cart]);
@@ -339,21 +375,12 @@ export default function ClientOrders() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Button
-                    onClick={() => { setStep('browse'); setMode('view'); }}
-                    variant="outline"
-                    className="h-12 text-base border-2 border-blue-300 text-blue-600 hover:bg-blue-50"
-                  >
-                    👀 Apenas Consultar
-                  </Button>
-                  <Button
-                    onClick={() => { setStep('browse'); setMode('order'); }}
-                    className="h-12 text-base bg-emerald-500 hover:bg-emerald-600"
-                  >
-                    🛒 Fazer uma Reserva
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => { setStep('browse'); }}
+                  className="w-full h-12 text-base bg-emerald-500 hover:bg-emerald-600"
+                >
+                  🛒 Começar
+                </Button>
 
                 <div className="flex gap-3 pt-4">
                   <Input
@@ -419,21 +446,13 @@ export default function ClientOrders() {
                           {parseFloat(product.stock) > 0 ? '✅ Disponível' : '❌ Indisponível'}
                         </div>
                       </div>
-                      {mode === 'order' && (
-                        <Button 
-                          onClick={() => addToCart(product)}
-                          disabled={parseFloat(product.stock) === 0}
-                          className="w-full bg-emerald-500 hover:bg-emerald-600 gap-2"
-                        >
-                          <ShoppingCart className="h-4 w-4" />
-                          Adicionar ao Carrinho
-                        </Button>
-                      )}
-                      {mode === 'view' && (
-                        <div className="text-xs text-center text-muted-foreground p-2 bg-blue-50 rounded">
-                          👀 Modo Consulta
-                        </div>
-                      )}
+                      <Button 
+                        onClick={() => addToCart(product)}
+                        disabled={parseFloat(product.stock) === 0}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 gap-2"
+                      >
+                        {mode === 'view' ? '📌 Consultar' : <><ShoppingCart className="h-4 w-4" /> Adicionar</> }
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}

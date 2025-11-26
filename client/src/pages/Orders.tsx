@@ -75,9 +75,9 @@ export default function Orders() {
     return 'bg-yellow-100 text-yellow-800';
   };
 
-  const pendingOrders = orders.filter((o: Order) => o.status === 'pending');
-  const approvedOrders = orders.filter((o: Order) => o.status === 'approved');
-  const cancelledOrders = orders.filter((o: Order) => o.status === 'cancelled');
+  const pendingOrders = orders.filter((o: any) => o.status === 'pending');
+  const approvedOrders = orders.filter((o: any) => o.status === 'approved');
+  const cancelledOrders = orders.filter((o: any) => o.status === 'cancelled');
 
   if (isLoading) {
     return (
@@ -136,7 +136,16 @@ export default function Orders() {
                     </div>
                     <div className="mb-3 space-y-1">
                       {order.items.map((item: any, idx: number) => (
-                        <p key={idx} className="text-sm">• Produto ID: {item.productId} - {item.quantity}x {formatCurrency(item.priceAtSale)}</p>
+                        <div key={idx} className={`text-sm p-2 rounded ${item.hasInsufficientStock ? 'bg-red-50 border border-red-200' : ''}`}>
+                          <p>
+                            • <strong>{item.productName}</strong> - {item.quantity}x {formatCurrency(item.priceAtSale)}
+                            {item.hasInsufficientStock && (
+                              <span className="text-red-600 text-xs ml-2">
+                                (Disponível: {item.currentStock})
+                              </span>
+                            )}
+                          </p>
+                        </div>
                       ))}
                     </div>
                     <div className="flex gap-2">
