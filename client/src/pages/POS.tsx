@@ -184,7 +184,7 @@ export default function POS() {
 
   const handleConfirmPreview = () => {
     setShowPreviewConfirm(false);
-    setConfirmOpen(true);
+    confirmSale();
   };
 
   const confirmSale = () => {
@@ -218,13 +218,40 @@ export default function POS() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
-      <div className="flex-1 flex flex-col min-w-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-border space-y-4">
+    <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-3 lg:gap-6 p-2 lg:p-4">
+      {/* MOBILE: Abas */}
+      <div className="lg:hidden">
+        <div className="flex gap-2 mb-4">
+          <Button 
+            variant="outline"
+            className="flex-1 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 border-emerald-200 hover:bg-emerald-100"
+            onClick={() => setSelectedCategory(cart.length > 0 ? 'all' : selectedCategory)}
+            data-testid="button-tab-produtos"
+          >
+            <ShoppingBag className="h-4 w-4 mr-2" />
+            Produtos
+          </Button>
+          {cart.length > 0 && (
+            <Button 
+              variant="default"
+              className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg"
+              onClick={() => setCheckoutOpen(true)}
+              data-testid="button-tab-carrinho"
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Carrinho ({cartCount})
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Produtos - Desktop sempre, Mobile em aba */}
+      <div className="flex-1 flex flex-col min-w-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden lg:block">
+        <div className="p-3 lg:p-4 border-b border-border space-y-3">
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             <Button 
               variant={selectedCategory === 'all' ? "default" : "outline"} 
-              className="rounded-full text-xs h-8"
+              className="rounded-full text-xs h-8 flex-shrink-0"
               onClick={() => setSelectedCategory('all')}
               data-testid="button-category-all"
             >
@@ -234,7 +261,7 @@ export default function POS() {
               <Button 
                 key={cat.id}
                 variant={selectedCategory === cat.id ? "default" : "outline"}
-                className={`rounded-full text-xs h-8 ${selectedCategory === cat.id ? cat.color : ''}`}
+                className={`rounded-full text-xs h-8 flex-shrink-0 ${selectedCategory === cat.id ? cat.color : ''}`}
                 onClick={() => setSelectedCategory(cat.id)}
                 data-testid={`button-category-${cat.id}`}
               >
@@ -243,10 +270,10 @@ export default function POS() {
             ))}
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar por nome ou código (SKU)..." 
-              className="pl-9 bg-muted/30"
+              placeholder="Buscar por nome ou código..." 
+              className="pl-9 bg-muted/30 text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-products"
@@ -254,8 +281,8 @@ export default function POS() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+        <ScrollArea className="flex-1 p-3 lg:p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-4">
             {filteredProducts.map(product => {
               const parsedStock = parseFloat(product.stock);
               const parsedMinStock = parseFloat(product.minStock);
@@ -264,27 +291,27 @@ export default function POS() {
               return (
                 <Card 
                   key={product.id} 
-                  className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/50 group ${parsedStock <= 0 ? 'opacity-60 pointer-events-none' : ''}`}
+                  className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group ${parsedStock <= 0 ? 'opacity-50 pointer-events-none' : 'hover:scale-105 hover:-translate-y-1'} rounded-lg`}
                   onClick={() => parsedStock > 0 && handleAddProduct(product)}
                   data-testid={`card-product-${product.id}`}
                 >
-                  <CardContent className="p-3 space-y-2">
-                    <div className="aspect-square rounded-lg bg-muted/50 relative overflow-hidden">
+                  <CardContent className="p-2 lg:p-3 space-y-2">
+                    <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 relative overflow-hidden border border-emerald-200/50">
                       {product.image ? (
                         <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-primary/80 text-5xl font-bold bg-primary/10">
+                        <div className="w-full h-full flex items-center justify-center text-emerald-600 text-4xl lg:text-5xl font-bold bg-emerald-50">
                           {product.name.charAt(0).toUpperCase()}
                         </div>
                       )}
                       {parsedStock <= parsedMinStock && parsedStock > 0 && (
-                        <Badge variant="destructive" className="absolute top-2 right-2 text-[10px] px-1.5 h-5">
-                          Pouco Estoque
+                        <Badge className="absolute top-2 right-2 text-[10px] px-1.5 h-5 bg-orange-500 hover:bg-orange-600">
+                          ⚠️ Pouco
                         </Badge>
                       )}
                       {parsedStock <= 0 && (
-                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center font-bold text-destructive text-sm">
-                          ESGOTADO
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                          <span className="text-white font-bold text-sm">Sem Estoque</span>
                         </div>
                       )}
                       {product.unit === 'kg' && (
@@ -294,13 +321,13 @@ export default function POS() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-medium text-sm leading-tight line-clamp-2 h-10">{product.name}</h3>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="font-bold text-primary">{formatCurrency(parsedPrice)}</span>
-                        <span className="text-xs text-muted-foreground">/{product.unit}</span>
+                      <h3 className="font-bold text-xs lg:text-sm leading-tight line-clamp-2 text-gray-800">{product.name}</h3>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="font-bold text-orange-600 text-sm lg:text-base">{formatCurrency(parsedPrice)}</span>
+                        <Badge variant="outline" className="text-[10px]">{product.unit}</Badge>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Estoque: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)} {product.unit}
+                      <div className="text-[10px] text-emerald-600 font-semibold mt-1">
+                        Est: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)}
                       </div>
                     </div>
                   </CardContent>
@@ -311,20 +338,21 @@ export default function POS() {
         </ScrollArea>
       </div>
 
-      <div className="w-full lg:w-[400px] bg-card rounded-xl border border-border shadow-xl flex flex-col h-full">
-        <div className="p-4 border-b border-border bg-primary/5">
-          <h2 className="font-heading font-bold text-lg flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5 text-primary" />
-            Carrinho Atual
+      <div className="hidden lg:flex w-full lg:w-[420px] bg-gradient-to-b from-orange-50 to-orange-100/50 rounded-xl border border-orange-200 shadow-2xl flex-col h-full">
+        <div className="p-4 border-b border-orange-200 bg-gradient-to-r from-orange-500 to-orange-600 rounded-t-xl">
+          <h2 className="font-heading font-bold text-lg flex items-center gap-2 text-white">
+            <ShoppingCart className="h-5 w-5" />
+            Carrinho ({cartCount})
           </h2>
-          <p className="text-sm text-muted-foreground" data-testid="text-cart-count">{cartCount} itens adicionados</p>
+          <p className="text-sm text-orange-100" data-testid="text-cart-count">{cart.length} itens · {formatCurrency(cartTotal)}</p>
         </div>
 
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 opacity-50">
-              <ShoppingBag className="h-16 w-16" />
-              <p>Carrinho vazio</p>
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 opacity-40">
+              <ShoppingBag className="h-16 w-16 text-orange-400" />
+              <p className="font-semibold">Carrinho Vazio</p>
+              <p className="text-xs">Clique em um produto para começar</p>
             </div>
           ) : (
             <div className="space-y-3">
