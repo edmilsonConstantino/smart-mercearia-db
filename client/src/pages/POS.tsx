@@ -61,6 +61,7 @@ export default function POS() {
   const [weightInGrams, setWeightInGrams] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'card' | 'pix' | 'mpesa' | 'emola' | 'pos' | 'bank' | null>(null);
+  const [showPreviewConfirm, setShowPreviewConfirm] = useState(false);
   
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
