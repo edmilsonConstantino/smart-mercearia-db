@@ -105,6 +105,8 @@ export default function Products() {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [increaseQuantity, setIncreaseQuantity] = useState('');
   const [increasePrice, setIncreasePrice] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const increaseStockMutation = useMutation({
     mutationFn: ({ id, quantity, price }: { id: string; quantity: number; price?: number }) => 
@@ -240,6 +242,47 @@ export default function Products() {
     if (confirm('Tem certeza que deseja deletar este produto?')) {
       deleteProductMutation.mutate(id);
     }
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingProduct || !editingProduct.name || !editingProduct.price) {
+      toast({ 
+        title: "Erro", 
+        description: "Nome e preço são obrigatórios",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (editCount && !editCount.canEdit) {
+      toast({ 
+        title: "Limite atingido", 
+        description: `Você atingiu o limite de ${editCount.limit} edições diárias`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    updateProductMutation.mutate({
+      id: editingProduct.id,
+      data: {
+        name: editingProduct.name,
+        sku: editingProduct.sku,
+        price: editingProduct.price,
+        costPrice: editingProduct.costPrice,
+        stock: editingProduct.stock,
+        minStock: editingProduct.minStock,
+        unit: editingProduct.unit,
+        categoryId: editingProduct.categoryId,
+        image: editingProduct.image
+      }
+    });
+    setIsEditOpen(false);
   };
 
   if (productsLoading || categoriesLoading) {

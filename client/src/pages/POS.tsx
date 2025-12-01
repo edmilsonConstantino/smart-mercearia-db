@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale, Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Product, productsApi, categoriesApi, salesApi } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -174,7 +174,16 @@ export default function POS() {
 
   const handleCheckout = (method: 'cash' | 'card' | 'pix' | 'mpesa' | 'emola' | 'pos' | 'bank') => {
     if (cart.length === 0 || !user) return;
+    if (method === 'cash' && amountReceived < cartTotal) {
+      toast({ title: "Erro", description: "Valor insuficiente para completar a venda", variant: "destructive" });
+      return;
+    }
     setSelectedPaymentMethod(method);
+    setShowPreviewConfirm(true);
+  };
+
+  const handleConfirmPreview = () => {
+    setShowPreviewConfirm(false);
     setConfirmOpen(true);
   };
 
@@ -493,6 +502,96 @@ export default function POS() {
           <DialogFooter>
              <Button variant="outline" onClick={() => setWeightOpen(false)} data-testid="button-cancel-weight">Cancelar</Button>
              <Button onClick={confirmWeightAdd} disabled={weightInGrams <= 0} data-testid="button-confirm-weight">Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Preview antes de Confirmar */}
+      <Dialog open={showPreviewConfirm} onOpenChange={setShowPreviewConfirm}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-heading font-bold">Revisar Venda</DialogTitle>
+            <DialogDescription>Verifique todos os detalhes antes de confirmar</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Itens */}
+            <div className="border rounded-lg p-4 bg-muted/5">
+              <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                <ShoppingBag className="h-4 w-4" /> Itens ({cart.length})
+              </h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {cart.map((item, idx) => {
+                  const product = products.find(p => p.id === item.productId);
+                  return (
+                    <div key={idx} className="flex justify-between items-center p-2 bg-background rounded border border-border text-sm">
+                      <div className="flex-1">
+                        <p className="font-medium">{product?.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.quantity.toFixed(product?.unit === 'kg' ? 3 : 0)} {product?.unit} × {formatCurrency(item.priceAtSale)}
+                        </p>
+                      </div>
+                      <span className="font-bold">{formatCurrency(item.quantity * item.priceAtSale)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Resumo Financeiro */}
+            <div className="border rounded-lg p-4 bg-muted/5 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal</span>
+                <span className="font-medium">{formatCurrency(subtotal)}</span>
+              </div>
+              {activeDiscount.type !== 'none' && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Desconto ({activeDiscount.type === 'percentage' ? `${activeDiscount.value}%` : 'Fixo'})</span>
+                  <span className="font-medium">-{formatCurrency(discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold border-t border-border pt-2">
+                <span>Total a Pagar</span>
+                <span className="text-primary">{formatCurrency(cartTotal)}</span>
+              </div>
+            </div>
+
+            {/* Método e Pagamento */}
+            <div className="border rounded-lg p-4 bg-muted/5 space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Método de Pagamento</p>
+                <p className="font-bold text-lg capitalize">{selectedPaymentMethod?.replace('-', ' ')}</p>
+              </div>
+              {selectedPaymentMethod === 'cash' && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span>Valor Recebido</span>
+                    <span className="font-medium">{formatCurrency(amountReceived)}</span>
+                  </div>
+                  <div className={`flex justify-between text-sm font-bold ${change >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                    <span>Troco</span>
+                    <span>{formatCurrency(change)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPreviewConfirm(false)}
+              className="w-full"
+            >
+              Voltar ao Carrinho
+            </Button>
+            <Button 
+              onClick={handleConfirmPreview}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Confirmar e Pagar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
