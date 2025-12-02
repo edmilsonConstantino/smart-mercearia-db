@@ -274,55 +274,61 @@ export default function POS() {
                       <p>Carrinho vazio</p>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
                       {cart.map((item) => {
                         const product = products.find(p => p.id === item.productId);
                         if (!product) return null;
                         return (
-                          <div key={item.productId} className="flex gap-3 p-3 bg-gradient-to-r from-emerald-50 to-orange-50 rounded-lg border border-orange-100">
-                            <div className="h-16 w-16 rounded-md overflow-hidden shrink-0 flex items-center justify-center border border-orange-200">
-                              {product.image ? (
-                                <img src={product.image} alt="" className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600 font-bold">
-                                  {product.name.charAt(0).toUpperCase()}
-                                </div>
-                              )}
+                          <div key={item.productId} className="p-4 bg-gradient-to-r from-emerald-50 to-orange-50 rounded-lg border-2 border-orange-200 shadow-sm">
+                            <div className="flex gap-4 mb-3">
+                              <div className="h-20 w-20 rounded-md overflow-hidden shrink-0 flex items-center justify-center border-2 border-orange-200">
+                                {product.image ? (
+                                  <img src={product.image} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600 font-bold text-2xl">
+                                    {product.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-base font-bold text-gray-800">{product.name}</h4>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  <span className="font-bold text-orange-600 text-lg">{formatCurrency(item.priceAtSale)}</span>
+                                </p>
+                                <p className="text-sm font-semibold text-orange-600 mt-2">
+                                  Total: {formatCurrency(item.priceAtSale * item.quantity)}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-sm font-bold text-gray-800">{product.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                <span className="font-semibold text-orange-600">{formatCurrency(item.priceAtSale)}</span> × {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
-                              </p>
-                              <div className="flex gap-1 mt-2">
+                            
+                            <div className="bg-white rounded-lg p-3 border border-orange-100">
+                              <p className="text-xs text-muted-foreground mb-2">Quantidade ({product.unit})</p>
+                              <div className="flex items-center justify-between gap-2">
                                 <button 
-                                  className="px-3 h-8 flex items-center rounded-md border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                                  className="flex-1 h-12 flex items-center justify-center rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold transition-colors shadow-md active:scale-95"
                                   onClick={() => handleQuantityChange(item.productId, -1)}
                                   data-testid={`button-decrease-mobile-${item.productId}`}
                                 >
-                                  <Minus className="h-4 w-4 text-orange-600" />
+                                  <Minus className="h-6 w-6" />
                                 </button>
-                                <span className="px-3 h-8 flex items-center rounded-md border border-gray-200 bg-gray-50 text-sm font-bold">
-                                  {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}
-                                </span>
+                                <div className="px-6 h-12 flex items-center rounded-lg border-2 border-orange-300 bg-orange-50 text-xl font-bold text-orange-600">
+                                  {item.quantity.toFixed(product.unit === 'kg' ? 1 : 0)}
+                                </div>
                                 <button 
-                                  className="px-3 h-8 flex items-center rounded-md border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                                  className="flex-1 h-12 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold transition-colors shadow-md active:scale-95"
                                   onClick={() => handleQuantityChange(item.productId, 1)}
                                   data-testid={`button-increase-mobile-${item.productId}`}
                                 >
-                                  <Plus className="h-4 w-4 text-orange-600" />
+                                  <Plus className="h-6 w-6" />
                                 </button>
                                 <button 
-                                  className="px-3 h-8 flex items-center rounded-md border border-red-200 bg-white hover:bg-red-50 transition-colors"
+                                  className="flex-1 h-12 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 text-red-600 font-bold transition-colors border border-red-300 active:scale-95"
                                   onClick={() => removeFromCart(item.productId)}
                                   data-testid={`button-remove-mobile-${item.productId}`}
                                 >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                  <Trash2 className="h-5 w-5" />
                                 </button>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-orange-600">{formatCurrency(item.priceAtSale * item.quantity)}</p>
                             </div>
                           </div>
                         );

@@ -29,6 +29,17 @@ import { salesApi, productsApi, usersApi, notificationsApi } from '@/lib/api';
 export default function Dashboard() {
   const { user } = useAuth();
   const [slideIndex, setSlideIndex] = useState(0);
+  
+  // Auto-scroll carousel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const container = document.querySelector('.scroll-smooth') as HTMLElement;
+      if (container) {
+        container.scrollBy({ left: 300, behavior: 'smooth' });
+      }
+    }, 4000); // Change slide every 4 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ['/api/sales'],
@@ -179,8 +190,6 @@ export default function Dashboard() {
             );
           })}
         </div>
-        <button onClick={() => document.querySelector('.scroll-smooth')?.scrollBy({ left: -300, behavior: 'smooth' })} className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 z-10"><ChevronLeft className="h-5 w-5" /></button>
-        <button onClick={() => document.querySelector('.scroll-smooth')?.scrollBy({ left: 300, behavior: 'smooth' })} className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 z-10"><ChevronRight className="h-5 w-5" /></button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
