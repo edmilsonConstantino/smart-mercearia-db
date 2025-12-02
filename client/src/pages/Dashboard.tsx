@@ -1,6 +1,7 @@
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 import { 
   DollarSign, 
   ShoppingBag, 
@@ -13,7 +14,9 @@ import {
   Activity,
   Zap,
   Star,
-  Bell
+  Bell,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { formatCurrency } from '@/lib/utils';
@@ -25,6 +28,7 @@ import { salesApi, productsApi, usersApi, notificationsApi } from '@/lib/api';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [slideIndex, setSlideIndex] = useState(0);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
     queryKey: ['/api/sales'],
@@ -139,76 +143,42 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50 hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-green-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-green-500/20"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Vendas Hoje</CardTitle>
-            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-              <DollarSign className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800" data-testid="text-sales-today">{formatCurrency(totalSalesToday)}</div>
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-              <span className="text-green-500 font-bold flex items-center bg-green-100 px-1.5 py-0.5 rounded-md">
-                <TrendingUp className="h-3 w-3 mr-1" /> +12.5%
-              </span>
-              <span className="opacity-70">vs ontem</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50 hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-blue-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-blue-500/20"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos</CardTitle>
-            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <ShoppingBag className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800" data-testid="text-orders-today">{totalOrdersToday}</div>
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-              <span className="text-blue-500 font-bold flex items-center bg-blue-100 px-1.5 py-0.5 rounded-md">
-                +{Math.floor(Math.random() * 5)}
-              </span>
-              <span className="opacity-70">na última hora</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={`relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50 hover:scale-[1.02] transition-transform duration-300 group ${lowStockCount > 0 ? 'ring-2 ring-destructive/20' : ''}`}>
-          <div className="absolute right-0 top-0 h-24 w-24 bg-red-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-red-500/20"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Alertas Estoque</CardTitle>
-            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${lowStockCount > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className={`text-3xl font-bold ${lowStockCount > 0 ? 'text-destructive' : 'text-gray-800'}`} data-testid="text-low-stock">{lowStockCount}</div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {lowStockCount > 0 ? 'Produtos abaixo do mínimo' : 'Estoque saudável'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50 hover:scale-[1.02] transition-transform duration-300 group">
-          <div className="absolute right-0 top-0 h-24 w-24 bg-orange-500/10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-orange-500/20"></div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Equipe Ativa</CardTitle>
-            <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-              <Users className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold text-gray-800" data-testid="text-active-users">{activeUsers}</div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Usuários cadastrados
-            </p>
-          </CardContent>
-        </Card>
+      <div className="relative">
+        <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory">
+          {[
+            { title: 'Vendas Hoje', value: formatCurrency(totalSalesToday), icon: DollarSign, bg: 'green', trend: '+12.5%', test: 'text-sales-today' },
+            { title: 'Pedidos', value: totalOrdersToday, icon: ShoppingBag, bg: 'blue', trend: `+${Math.floor(Math.random() * 5)}`, test: 'text-orders-today' },
+            { title: 'Alertas Estoque', value: lowStockCount, icon: AlertTriangle, bg: 'red', trend: lowStockCount > 0 ? 'CRÍTICO' : 'Normal', test: 'text-low-stock' },
+            { title: 'Equipe Ativa', value: activeUsers, icon: Users, bg: 'orange', trend: 'Online', test: 'text-active-users' }
+          ].map((card, idx) => {
+            const Icon = card.icon;
+            const bgColor = card.bg === 'green' ? 'from-green-50 to-green-100' : card.bg === 'blue' ? 'from-blue-50 to-blue-100' : card.bg === 'red' ? 'from-red-50 to-red-100' : 'from-orange-50 to-orange-100';
+            const iconBg = card.bg === 'green' ? 'bg-green-100 text-green-600' : card.bg === 'blue' ? 'bg-blue-100 text-blue-600' : card.bg === 'red' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600';
+            const trendColor = card.bg === 'red' && card.trend === 'CRÍTICO' ? 'text-red-600 bg-red-100' : 'text-' + card.bg + '-500 bg-' + card.bg + '-100';
+            
+            return (
+              <Card key={idx} className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br " + bgColor + " hover:scale-[1.02] transition-transform duration-300 group flex-shrink-0 w-full sm:w-72 snap-start">
+                <div className="absolute right-0 top-0 h-24 w-24 " + (card.bg === 'green' ? 'bg-green-500/10' : card.bg === 'blue' ? 'bg-blue-500/10' : card.bg === 'red' ? 'bg-red-500/10' : 'bg-orange-500/10') + " rounded-bl-full -mr-4 -mt-4 transition-all group-hover:" + (card.bg === 'green' ? 'bg-green-500/20' : card.bg === 'blue' ? 'bg-blue-500/20' : card.bg === 'red' ? 'bg-red-500/20' : 'bg-orange-500/20') + ""></div>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
+                  <div className={"h-8 w-8 rounded-full flex items-center justify-center " + iconBg}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                </CardHeader>
+                <CardContent className="relative z-10">
+                  <div className="text-3xl font-bold text-gray-800" data-testid={card.test}>{card.value}</div>
+                  <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                    <span className={trendColor + " font-bold flex items-center px-1.5 py-0.5 rounded-md"}>
+                      <TrendingUp className="h-3 w-3 mr-1" /> {card.trend}
+                    </span>
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+        <button onClick={() => document.querySelector('.scroll-smooth')?.scrollBy({ left: -300, behavior: 'smooth' })} className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 z-10"><ChevronLeft className="h-5 w-5" /></button>
+        <button onClick={() => document.querySelector('.scroll-smooth')?.scrollBy({ left: 300, behavior: 'smooth' })} className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 z-10"><ChevronRight className="h-5 w-5" /></button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

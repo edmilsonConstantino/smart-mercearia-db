@@ -186,8 +186,12 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(sales).where(eq(sales.userId, userId)).orderBy(desc(sales.createdAt));
   }
 
-  async createSale(sale: InsertSale): Promise<Sale> {
-    const [newSale] = await db.insert(sales).values(sale).returning();
+  async createSale(sale: InsertSale & { preview?: any }): Promise<Sale> {
+    const { preview, ...saleData } = sale;
+    const [newSale] = await db.insert(sales).values({
+      ...saleData,
+      preview: preview || null
+    }).returning();
     
     // Update stock for each item
     for (const item of sale.items) {

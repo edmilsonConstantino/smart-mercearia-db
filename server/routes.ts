@@ -454,14 +454,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get sales with preview (admin only for audit/history)
+  app.get("/api/sales/history/previews", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const sales = await storage.getAllSales();
+      const withPreviews = sales.filter(s => s.preview).map(s => ({
+        id: s.id,
+        userId: s.userId,
+        createdAt: s.createdAt,
+        total: s.total,
+        preview: s.preview
+      }));
+      res.json(withPreviews);
+    } catch (error) {
+      console.error("Get sales previews error:", error);
+      res.status(500).json({ error: "Erro ao buscar histórico de vendas" });
+    }
+  });
+
   app.post("/api/sales", requireAuth, async (req: Request, res: Response) => {
     try {
+      const { preview, ...bodyData } = req.body;
       const data = insertSaleSchema.parse({
-        ...req.body,
+        ...bodyData,
         userId: req.session.userId
       });
 
-      const newSale = await storage.createSale(data);
+      const newSale = await storage.createSale({
+        ...data,
+        preview
+      });
 
       // Audit log
       await storage.createAuditLog({
