@@ -232,15 +232,116 @@ export default function POS() {
             Produtos
           </Button>
           {cart.length > 0 && (
-            <Button 
-              variant="default"
-              className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg"
-              onClick={() => setCheckoutOpen(true)}
-              data-testid="button-tab-carrinho"
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Carrinho ({cartCount})
-            </Button>
+            <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="default"
+                  className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg"
+                  data-testid="button-tab-carrinho"
+                >
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Carrinho ({cartCount})
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold">Carrinho ({cart.length})</DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-3 py-4">
+                  {cart.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <ShoppingBag className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Carrinho vazio</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {cart.map((item) => {
+                        const product = products.find(p => p.id === item.productId);
+                        if (!product) return null;
+                        return (
+                          <div key={item.productId} className="flex gap-3 p-3 bg-gradient-to-r from-emerald-50 to-orange-50 rounded-lg border border-orange-100">
+                            <div className="h-16 w-16 rounded-md overflow-hidden shrink-0 flex items-center justify-center border border-orange-200">
+                              {product.image ? (
+                                <img src={product.image} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600 font-bold">
+                                  {product.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-bold text-gray-800">{product.name}</h4>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                <span className="font-semibold text-orange-600">{formatCurrency(item.priceAtSale)}</span> × {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
+                              </p>
+                              <div className="flex gap-1 mt-2">
+                                <button 
+                                  className="px-3 h-8 flex items-center rounded-md border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                                  onClick={() => handleQuantityChange(item.productId, -1)}
+                                  data-testid={`button-decrease-mobile-${item.productId}`}
+                                >
+                                  <Minus className="h-4 w-4 text-orange-600" />
+                                </button>
+                                <span className="px-3 h-8 flex items-center rounded-md border border-gray-200 bg-gray-50 text-sm font-bold">
+                                  {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}
+                                </span>
+                                <button 
+                                  className="px-3 h-8 flex items-center rounded-md border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                                  onClick={() => handleQuantityChange(item.productId, 1)}
+                                  data-testid={`button-increase-mobile-${item.productId}`}
+                                >
+                                  <Plus className="h-4 w-4 text-orange-600" />
+                                </button>
+                                <button 
+                                  className="px-3 h-8 flex items-center rounded-md border border-red-200 bg-white hover:bg-red-50 transition-colors"
+                                  onClick={() => removeFromCart(item.productId)}
+                                  data-testid={`button-remove-mobile-${item.productId}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-orange-600">{formatCurrency(item.priceAtSale * item.quantity)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {cart.length > 0 && (
+                  <div className="border-t pt-4 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-medium">{formatCurrency(subtotal)}</span>
+                      </div>
+                      {activeDiscount.type !== 'none' && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Desconto</span>
+                          <span className="font-medium">-{formatCurrency(discountAmount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-lg font-bold border-t pt-2">
+                        <span>Total</span>
+                        <span className="text-orange-600">{formatCurrency(cartTotal)}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" onClick={() => clearCart()} data-testid="button-clear-mobile">
+                        <Trash2 className="h-4 w-4 mr-2" /> Limpar
+                      </Button>
+                      <Button className="bg-green-600 hover:bg-green-700" onClick={() => { setCheckoutOpen(false); openCheckout(); }} data-testid="button-checkout-mobile">
+                        Finalizar <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           )}
         </div>
       </div>
@@ -360,39 +461,48 @@ export default function POS() {
                 const product = products.find(p => p.id === item.productId);
                 if (!product) return null;
                 return (
-                  <div key={item.productId} className="flex gap-3 p-3 bg-muted/30 rounded-lg border border-transparent hover:border-border transition-colors" data-testid={`cart-item-${item.productId}`}>
-                    <div className="h-12 w-12 rounded-md overflow-hidden shrink-0 flex items-center justify-center">
+                  <div key={item.productId} className="flex gap-3 p-3 bg-gradient-to-r from-emerald-50 to-orange-50 rounded-lg border border-orange-100 hover:border-orange-300 transition-all hover:shadow-md" data-testid={`cart-item-${item.productId}`}>
+                    <div className="h-14 w-14 rounded-md overflow-hidden shrink-0 flex items-center justify-center border border-orange-200">
                        {product.image ? (
                          <img src={product.image} alt="" className="h-full w-full object-cover" />
                        ) : (
-                         <div className="h-full w-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
+                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600 font-bold text-lg">
                            {product.name.charAt(0).toUpperCase()}
                          </div>
                        )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium truncate">{product.name}</h4>
-                      <div className="text-xs text-muted-foreground">
-                        {formatCurrency(item.priceAtSale)} x {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
+                      <h4 className="text-sm font-bold text-gray-800 truncate">{product.name}</h4>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <span className="font-semibold text-orange-600">{formatCurrency(item.priceAtSale)}</span> × {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="font-bold text-sm">{formatCurrency(item.priceAtSale * item.quantity)}</span>
-                      <div className="flex items-center bg-background rounded-md border border-input h-7">
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="font-bold text-base text-orange-600">{formatCurrency(item.priceAtSale * item.quantity)}</span>
+                      <div className="flex gap-1">
+                        <div className="flex items-center bg-white rounded-md border border-orange-200 h-8 shadow-sm">
+                          <button 
+                            className="px-2 hover:bg-orange-50 h-full flex items-center transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, -1); }}
+                            data-testid={`button-decrease-${item.productId}`}
+                          >
+                            <Minus className="h-4 w-4 text-orange-600" />
+                          </button>
+                          <span className="w-10 text-center text-sm font-bold tabular-nums text-gray-800">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
+                          <button 
+                            className="px-2 hover:bg-orange-50 h-full flex items-center transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
+                            data-testid={`button-increase-${item.productId}`}
+                          >
+                            <Plus className="h-4 w-4 text-orange-600" />
+                          </button>
+                        </div>
                         <button 
-                          className="px-2 hover:bg-muted h-full flex items-center"
-                          onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, -1); }}
-                          data-testid={`button-decrease-${item.productId}`}
+                          className="px-3 hover:bg-red-50 h-8 flex items-center rounded-md border border-red-200 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); removeFromCart(item.productId); }}
+                          data-testid={`button-remove-${item.productId}`}
                         >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-12 text-center text-xs font-medium tabular-nums">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
-                        <button 
-                          className="px-2 hover:bg-muted h-full flex items-center"
-                          onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
-                          data-testid={`button-increase-${item.productId}`}
-                        >
-                          <Plus className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4 text-red-600" />
                         </button>
                       </div>
                     </div>
