@@ -200,7 +200,26 @@ export default function POS() {
         productId: item.productId,
         quantity: item.quantity,
         priceAtSale: item.priceAtSale
-      }))
+      })),
+      preview: {
+        items: cart.map(item => {
+          const product = products.find(p => p.id === item.productId);
+          return {
+            productId: item.productId,
+            quantity: item.quantity,
+            priceAtSale: item.priceAtSale,
+            productName: product?.name || '',
+            productUnit: product?.unit || ''
+          };
+        }),
+        subtotal,
+        discount: activeDiscount,
+        discountAmount,
+        total: cartTotal,
+        paymentMethod: selectedPaymentMethod,
+        amountReceived: amountReceived > 0 ? amountReceived : undefined,
+        change: change > 0 ? change : undefined
+      }
     });
     setConfirmOpen(false);
     setSelectedPaymentMethod(null);
@@ -476,35 +495,35 @@ export default function POS() {
                       <div className="text-xs text-muted-foreground mt-1">
                         <span className="font-semibold text-orange-600">{formatCurrency(item.priceAtSale)}</span> × {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}{product.unit}
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="font-bold text-base text-orange-600">{formatCurrency(item.priceAtSale * item.quantity)}</span>
-                      <div className="flex gap-1">
-                        <div className="flex items-center bg-white rounded-md border border-orange-200 h-8 shadow-sm">
-                          <button 
-                            className="px-2 hover:bg-orange-50 h-full flex items-center transition-colors"
-                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, -1); }}
-                            data-testid={`button-decrease-${item.productId}`}
-                          >
-                            <Minus className="h-4 w-4 text-orange-600" />
-                          </button>
-                          <span className="w-10 text-center text-sm font-bold tabular-nums text-gray-800">{item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}</span>
-                          <button 
-                            className="px-2 hover:bg-orange-50 h-full flex items-center transition-colors"
-                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(item.productId, 1); }}
-                            data-testid={`button-increase-${item.productId}`}
-                          >
-                            <Plus className="h-4 w-4 text-orange-600" />
-                          </button>
-                        </div>
+                      <div className="flex gap-1 mt-2">
                         <button 
-                          className="px-3 hover:bg-red-50 h-8 flex items-center rounded-md border border-red-200 transition-colors"
-                          onClick={(e) => { e.stopPropagation(); removeFromCart(item.productId); }}
+                          className="px-2 h-7 flex items-center rounded border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                          onClick={() => handleQuantityChange(item.productId, -1)}
+                          data-testid={`button-decrease-${item.productId}`}
+                        >
+                          <Minus className="h-4 w-4 text-orange-600" />
+                        </button>
+                        <span className="px-2 h-7 flex items-center rounded border border-gray-200 bg-gray-50 text-xs font-bold">
+                          {item.quantity.toFixed(product.unit === 'kg' ? 3 : 0)}
+                        </span>
+                        <button 
+                          className="px-2 h-7 flex items-center rounded border border-orange-200 bg-white hover:bg-orange-50 transition-colors"
+                          onClick={() => handleQuantityChange(item.productId, 1)}
+                          data-testid={`button-increase-${item.productId}`}
+                        >
+                          <Plus className="h-4 w-4 text-orange-600" />
+                        </button>
+                        <button 
+                          className="px-2 h-7 flex items-center rounded border border-red-200 bg-white hover:bg-red-50 transition-colors"
+                          onClick={() => removeFromCart(item.productId)}
                           data-testid={`button-remove-${item.productId}`}
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </button>
                       </div>
+                    </div>
+                    <div className="text-right min-w-fit">
+                      <p className="font-bold text-orange-600 text-sm">{formatCurrency(item.priceAtSale * item.quantity)}</p>
                     </div>
                   </div>
                 );

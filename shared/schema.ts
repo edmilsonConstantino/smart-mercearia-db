@@ -63,6 +63,16 @@ export const sales = pgTable("sales", {
     quantity: number;
     priceAtSale: number;
   }>>(),
+  preview: jsonb("preview").$type<{
+    items: Array<{ productId: string; quantity: number; priceAtSale: number; productName: string; productUnit: string }>;
+    subtotal: number;
+    discount: { type: 'none' | 'percentage' | 'fixed'; value: number };
+    discountAmount: number;
+    total: number;
+    paymentMethod: string;
+    amountReceived?: number;
+    change?: number;
+  }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
