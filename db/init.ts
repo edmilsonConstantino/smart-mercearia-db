@@ -44,13 +44,15 @@ export async function seedDatabase() {
 
   // Criar categorias
   console.log('Criando categorias...');
-  const [frutas, verduras, graos, bebidas, laticinios] = await db.insert(categories).values([
+  const categoriesResult = await db.insert(categories).values([
     { name: 'Frutas', color: 'bg-orange-100 text-orange-800 border-orange-200' },
     { name: 'Verduras', color: 'bg-green-100 text-green-800 border-green-200' },
     { name: 'Grãos', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     { name: 'Bebidas', color: 'bg-blue-100 text-blue-800 border-blue-200' },
     { name: 'Laticínios', color: 'bg-purple-100 text-purple-800 border-purple-200' }
   ]).returning();
+
+  const [frutas, verduras, graos, bebidas, laticinios] = categoriesResult;
 
   console.log('✓ Categorias criadas');
 
