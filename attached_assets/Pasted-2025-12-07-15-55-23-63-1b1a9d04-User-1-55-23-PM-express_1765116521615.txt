@@ -1,0 +1,124 @@
+2025-12-07 15:55:23.63
+1b1a9d04
+User
+1:55:23 PM [express] ✅ Setup complete - application ready
+2025-12-07 15:55:24.97
+ef2c70a1
+User
+1:55:24 PM [express] GET /api/notifications 304 in 19ms :: []
+2025-12-07 15:55:30.96
+1b1a9d04
+User
+1:55:30 PM [express] GET /api/audit-logs 401 in 3ms :: {"error":"Não autenticado"}
+2025-12-07 15:55:34.95
+1b1a9d04
+User
+1:55:34 PM [express] GET /api/notifications 401 in 1ms :: {"error":"Não autenticado"}
+2025-12-07 15:55:45.28
+1b1a9d04
+User
+1:55:45 PM [express] GET /api/notifications 401 in 1ms :: {"error":"Não autenticado"}
+2025-12-07 15:55:55.73
+1b1a9d04
+User
+1:55:55 PM [express] GET /api/notifications 401 in 1ms :: {"error":"Não autenticado"}
+2025-12-07 15:56:02.14
+1b1a9d04
+User
+1:56:02 PM [express] POST /api/users 401 in 0ms :: {"error":"Não autenticado"}
+2025-12-07 15:56:05.45
+1b1a9d04
+User
+1:56:05 PM [express] POST /api/users 401 in 0ms :: {"error":"Não autenticado"}
+2025-12-07 15:56:06.27
+1b1a9d04
+User
+1:56:06 PM [express] GET /api/notifications 401 in 1ms :: {"error":"Não autenticado"}
+2025-12-07 15:56:16.92
+1b1a9d04
+User
+1:56:16 PM [express] GET /api/notifications 401 in 2ms :: {"error":"Não autenticado"}
+2025-12-07 15:59:58.56
+1b1a9d04
+User
+1:59:58 PM [express] GET /api/notifications 401 in 1ms :: {"error":"Não autenticado"}
+2025-12-07 16:00:30.90
+ef2c70a1
+System
+system: received signal terminated
+2025-12-07 16:06:42.91
+84ccce3d
+System
+starting up user application
+2025-12-07 16:06:42.91
+84ccce3d
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2025-12-07 16:06:42.91
+84ccce3d
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2025-12-07 16:06:44.24
+84ccce3d
+User
+> NODE_ENV=production node dist/index.js
+2025-12-07 16:06:44.24
+84ccce3d
+User
+> rest-express@1.0.0 start
+2025-12-07 16:06:44.85
+84ccce3d
+User
+memory, and will not scale past a single process.
+2025-12-07 16:06:44.85
+84ccce3d
+User
+Warning: connect.session() MemoryStore is not
+2025-12-07 16:06:44.85
+84ccce3d
+User
+designed for a production environment, as it will leak
+2025-12-07 16:06:44.95
+84ccce3d
+User
+2:06:44 PM [express] Initializing database...
+2025-12-07 16:06:44.95
+84ccce3d
+User
+🔍 Verificando banco de dados (PRODUÇÃO)...
+2025-12-07 16:06:44.95
+84ccce3d
+User
+🔐 Verificando usuário admin...
+2025-12-07 16:06:45.12
+84ccce3d
+User
+✓ Usuário admin já existe
+2025-12-07 16:06:45.20
+84ccce3d
+User
+2:06:45 PM [express] Database initialization complete
+2025-12-07 16:06:45.20
+84ccce3d
+User
+2:06:45 PM [express] Registering routes...
+2025-12-07 16:06:45.21
+84ccce3d
+User
+2:06:45 PM [express] Routes registered
+2025-12-07 16:06:45.21
+84ccce3d
+User
+2:06:45 PM [express] ✓ Server listening on 0.0.0.0:5000
+2025-12-07 16:06:45.21
+84ccce3d
+User
+2:06:45 PM [express] Environment: production
+2025-12-07 16:06:45.21
+84ccce3d
+User
+2:06:45 PM [express] Running setup (Vite/static serve)...
+2025-12-07 16:06:45.21
+84ccce3d
+User
+2:06:45 PM [express] ✅ Setup complete - application ready
