@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale, Check } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, QrCode, AlertCircle, ShoppingBag, ArrowRight, Percent, Scale, Check, LayoutGrid, List } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Product, productsApi, categoriesApi, salesApi } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -66,6 +66,7 @@ export default function POS() {
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [activeDiscount, setActiveDiscount] = useState({ type: 'none', value: 0 });
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
   const canApplyDiscount = user?.role === 'admin' || user?.role === 'manager';
 
@@ -405,72 +406,161 @@ export default function POS() {
               </Button>
             ))}
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar por nome ou código..." 
-              className="pl-9 bg-muted/30 text-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-products"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Buscar por nome ou código..." 
+                className="pl-9 bg-muted/30 text-sm"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="input-search-products"
+              />
+            </div>
+            <div className="flex border rounded-md">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="icon"
+                onClick={() => setViewMode('list')}
+                className="rounded-r-none"
+                data-testid="button-view-list"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="icon"
+                onClick={() => setViewMode('grid')}
+                className="rounded-l-none"
+                data-testid="button-view-grid"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
         <ScrollArea className="flex-1 p-3 lg:p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-4">
-            {filteredProducts.map(product => {
-              const parsedStock = parseFloat(product.stock);
-              const parsedMinStock = parseFloat(product.minStock);
-              const parsedPrice = parseFloat(product.price);
+          {viewMode === 'list' ? (
+            <div className="space-y-2">
+              {filteredProducts.map(product => {
+                const parsedStock = parseFloat(product.stock);
+                const parsedMinStock = parseFloat(product.minStock);
+                const parsedPrice = parseFloat(product.price);
 
-              return (
-                <Card 
-                  key={product.id} 
-                  className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group ${parsedStock <= 0 ? 'opacity-50 pointer-events-none' : 'hover:scale-105 hover:-translate-y-1'} rounded-lg`}
-                  onClick={() => parsedStock > 0 && handleAddProduct(product)}
-                  data-testid={`card-product-${product.id}`}
-                >
-                  <CardContent className="p-2 lg:p-3 space-y-2">
-                    <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 relative overflow-hidden border border-emerald-200/50">
+                return (
+                  <div 
+                    key={product.id} 
+                    className={`flex items-center gap-3 p-3 bg-card rounded-lg border cursor-pointer transition-all ${parsedStock <= 0 ? 'opacity-50 pointer-events-none' : 'hover:border-primary/50 hover:shadow-md active:scale-[0.99]'}`}
+                    onClick={() => parsedStock > 0 && handleAddProduct(product)}
+                    data-testid={`card-product-${product.id}`}
+                  >
+                    <div className="h-14 w-14 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center shrink-0 border border-emerald-200/50 relative overflow-hidden">
                       {product.image ? (
-                        <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-emerald-600 text-4xl lg:text-5xl font-bold bg-emerald-50">
+                        <span className="text-emerald-600 text-xl font-bold">
                           {product.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      {parsedStock <= parsedMinStock && parsedStock > 0 && (
-                        <Badge className="absolute top-2 right-2 text-[10px] px-1.5 h-5 bg-orange-500 hover:bg-orange-600">
-                          ⚠️ Pouco
-                        </Badge>
+                        </span>
                       )}
                       {parsedStock <= 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                          <span className="text-white font-bold text-sm">Sem Estoque</span>
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <span className="text-white text-[8px] font-bold">Esgotado</span>
                         </div>
                       )}
-                      {product.unit === 'kg' && (
-                        <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] bg-white/90 backdrop-blur text-foreground border-none shadow-sm">
-                          <Scale className="h-3 w-3 mr-1" /> Pesável
-                        </Badge>
-                      )}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-xs lg:text-sm leading-tight line-clamp-2 text-gray-800">{product.name}</h3>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="font-bold text-orange-600 text-sm lg:text-base">{formatCurrency(parsedPrice)}</span>
-                        <Badge variant="outline" className="text-[10px]">{product.unit}</Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-sm leading-tight truncate">{product.name}</h3>
+                        <span className="font-bold text-orange-600 text-base shrink-0">{formatCurrency(parsedPrice)}</span>
                       </div>
-                      <div className="text-[10px] text-emerald-600 font-semibold mt-1">
-                        Est: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)}
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-[10px] h-5">{product.unit}</Badge>
+                        {product.unit === 'kg' && (
+                          <Badge variant="secondary" className="text-[10px] h-5">
+                            <Scale className="h-3 w-3 mr-1" /> Pesável
+                          </Badge>
+                        )}
+                        {parsedStock <= parsedMinStock && parsedStock > 0 && (
+                          <Badge className="text-[10px] h-5 bg-orange-500">Pouco estoque</Badge>
+                        )}
+                        <span className="text-[10px] text-muted-foreground ml-auto">
+                          Est: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                    <Button
+                      size="icon"
+                      variant="default"
+                      className="shrink-0 h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (parsedStock > 0) handleAddProduct(product);
+                      }}
+                      disabled={parsedStock <= 0}
+                      data-testid={`button-add-${product.id}`}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-4">
+              {filteredProducts.map(product => {
+                const parsedStock = parseFloat(product.stock);
+                const parsedMinStock = parseFloat(product.minStock);
+                const parsedPrice = parseFloat(product.price);
+
+                return (
+                  <Card 
+                    key={product.id} 
+                    className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/50 group ${parsedStock <= 0 ? 'opacity-50 pointer-events-none' : 'hover:scale-105 hover:-translate-y-1'} rounded-lg`}
+                    onClick={() => parsedStock > 0 && handleAddProduct(product)}
+                    data-testid={`card-product-${product.id}`}
+                  >
+                    <CardContent className="p-2 lg:p-3 space-y-2">
+                      <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 relative overflow-hidden border border-emerald-200/50">
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-emerald-600 text-4xl lg:text-5xl font-bold bg-emerald-50">
+                            {product.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        {parsedStock <= parsedMinStock && parsedStock > 0 && (
+                          <Badge className="absolute top-2 right-2 text-[10px] px-1.5 h-5 bg-orange-500 hover:bg-orange-600">
+                            Pouco
+                          </Badge>
+                        )}
+                        {parsedStock <= 0 && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                            <span className="text-white font-bold text-sm">Sem Estoque</span>
+                          </div>
+                        )}
+                        {product.unit === 'kg' && (
+                          <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] bg-white/90 backdrop-blur text-foreground border-none shadow-sm">
+                            <Scale className="h-3 w-3 mr-1" /> Pesável
+                          </Badge>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-xs lg:text-sm leading-tight line-clamp-2 text-gray-800">{product.name}</h3>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="font-bold text-orange-600 text-sm lg:text-base">{formatCurrency(parsedPrice)}</span>
+                          <Badge variant="outline" className="text-[10px]">{product.unit}</Badge>
+                        </div>
+                        <div className="text-[10px] text-emerald-600 font-semibold mt-1">
+                          Est: {parsedStock.toFixed(product.unit === 'kg' ? 3 : 0)}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </ScrollArea>
       </div>
 
