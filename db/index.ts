@@ -1,28 +1,15 @@
-// import { drizzle } from 'drizzle-orm/neon-http';
-// import { neon } from '@neondatabase/serverless';
-// import * as schema from '../shared/schema';
-
-
-// if (!process.env.DATABASE_URL) {
-//   throw new Error('DATABASE_URL must be set. Did you forget to provision a database?');
-// }
-
-// const sql = neon(process.env.DATABASE_URL);
-// export const db = drizzle(sql, { schema });
-// db/index.ts
 // db/index.ts
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../shared/schema';
 
-// NÃO verificar DATABASE_URL aqui - será verificado quando usado
-// Isso permite que o dotenv carregue primeiro
-
 // Função para obter a DATABASE_URL
 function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    throw new Error('❌ DATABASE_URL não está definida no arquivo .env');
+    console.error('❌ DATABASE_URL não está definida!');
+    console.error('   Verifique suas variáveis de ambiente');
+    throw new Error('DATABASE_URL is required');
   }
   return url;
 }
@@ -31,9 +18,9 @@ function getDatabaseUrl(): string {
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Máximo de conexões no pool
+  max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000, // Aumentado para 10s
 });
 
 // Eventos de monitoramento do pool
@@ -65,16 +52,18 @@ export async function testConnection() {
     console.error('   Erro:', error instanceof Error ? error.message : error);
     const dbUrl = process.env.DATABASE_URL;
     if (dbUrl) {
-      // Oculta a senha no log
-      console.error('   DATABASE_URL:', dbUrl.replace(/:[^:@]+@/, ':****@'));
+      // Mostra apenas o hostname (sem senha)
+      const urlObj = new URL(dbUrl);
+      console.error('   Host:', urlObj.hostname);
+      console.error('   Database:', urlObj.pathname.slice(1));
     } else {
       console.error('   DATABASE_URL: não definida!');
     }
-    return false;
+    throw error;
   }
 }
 
-// Função para fechar todas as conexões (útil para shutdown gracioso)
+// Função para fechar todas as conexões
 export async function closeDatabase() {
   try {
     await pool.end();
@@ -84,7 +73,5 @@ export async function closeDatabase() {
   }
 }
 
-// Exportar pool caso precise de acesso direto
 export { pool };
-
 export default db;
