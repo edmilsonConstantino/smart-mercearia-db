@@ -1,17 +1,20 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, serial, jsonb } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Helper para criar IDs únicos (substituindo UUID do PostgreSQL)
+const generateId = () => crypto.randomUUID();
+
 // USERS TABLE
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().$type<'admin' | 'manager' | 'seller'>(),
   avatar: text("avatar"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -19,11 +22,11 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // CATEGORIES TABLE
-export const categories = pgTable("categories", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const categories = sqliteTable("categories", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
   name: text("name").notNull(),
-  color: text("color").notNull(), // Tailwind classes like "bg-green-100 text-green-800"
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  color: text("color").notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
@@ -31,19 +34,19 @@ export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 
 // PRODUCTS TABLE
-export const products = pgTable("products", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const products = sqliteTable("products", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
   sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
-  categoryId: varchar("category_id").references(() => categories.id),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  costPrice: decimal("cost_price", { precision: 10, scale: 2 }).default('0'),
-  stock: decimal("stock", { precision: 10, scale: 3 }).notNull().default('0'), // Decimal for kg support
-  minStock: decimal("min_stock", { precision: 10, scale: 3 }).default('5'),
+  categoryId: text("category_id").references(() => categories.id),
+  price: text("price").notNull(), // SQLite armazena como TEXT
+  costPrice: text("cost_price").default('0'),
+  stock: text("stock").notNull().default('0'),
+  minStock: text("min_stock").default('5'),
   unit: text("unit").notNull().$type<'un' | 'kg' | 'g' | 'pack' | 'box'>(),
   image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
@@ -51,19 +54,19 @@ export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
 
 // SALES TABLE
-export const sales = pgTable("sales", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-  amountReceived: decimal("amount_received", { precision: 10, scale: 2 }),
-  change: decimal("change", { precision: 10, scale: 2 }),
+export const sales = sqliteTable("sales", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
+  userId: text("user_id").notNull().references(() => users.id),
+  total: text("total").notNull(),
+  amountReceived: text("amount_received"),
+  change: text("change"),
   paymentMethod: text("payment_method").notNull().$type<'cash' | 'card' | 'pix' | 'mpesa' | 'emola' | 'pos' | 'bank'>(),
-  items: jsonb("items").notNull().$type<Array<{
+  items: text("items", { mode: 'json' }).notNull().$type<Array<{
     productId: string;
     quantity: number;
     priceAtSale: number;
   }>>(),
-  preview: jsonb("preview").$type<{
+  preview: text("preview", { mode: 'json' }).$type<{
     items: Array<{ productId: string; quantity: number; priceAtSale: number; productName: string; productUnit: string }>;
     subtotal: number;
     discount: { type: 'none' | 'percentage' | 'fixed'; value: number };
@@ -73,7 +76,7 @@ export const sales = pgTable("sales", {
     amountReceived?: number;
     change?: number;
   }>(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertSaleSchema = createInsertSchema(sales).omit({ id: true, createdAt: true });
@@ -81,14 +84,14 @@ export type InsertSale = z.infer<typeof insertSaleSchema>;
 export type Sale = typeof sales.$inferSelect;
 
 // NOTIFICATIONS TABLE
-export const notifications = pgTable("notifications", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id), // null = all users
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
+  userId: text("user_id").references(() => users.id),
   type: text("type").notNull().$type<'info' | 'warning' | 'success' | 'error'>(),
   message: text("message").notNull(),
-  read: boolean("read").default(false).notNull(),
-  metadata: jsonb("metadata"), // Extra info like productId, saleId, etc
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  read: integer("read", { mode: 'boolean' }).default(false).notNull(),
+  metadata: text("metadata", { mode: 'json' }),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
@@ -96,25 +99,25 @@ export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
 
 // AUDIT LOG TABLE
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  action: text("action").notNull(), // "CREATE_PRODUCT", "UPDATE_PRODUCT", "DELETE_PRODUCT", "SALE", etc
-  entityType: text("entity_type").notNull(), // "product", "sale", "user", etc
-  entityId: varchar("entity_id"),
-  details: jsonb("details"), // Snapshot of the change
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const auditLogs = sqliteTable("audit_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull().references(() => users.id),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  details: text("details", { mode: 'json' }),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 
-// DAILY EDIT TRACKER (for seller limit of 5 edits per day)
-export const dailyEdits = pgTable("daily_edits", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  date: text("date").notNull(), // Format: YYYY-MM-DD
+// DAILY EDIT TRACKER
+export const dailyEdits = sqliteTable("daily_edits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull().references(() => users.id),
+  date: text("date").notNull(),
   editCount: integer("edit_count").default(0).notNull(),
 });
 
@@ -123,51 +126,51 @@ export type InsertDailyEdit = z.infer<typeof insertDailyEditSchema>;
 export type DailyEdit = typeof dailyEdits.$inferSelect;
 
 // TASKS TABLE
-export const tasks = pgTable("tasks", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const tasks = sqliteTable("tasks", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
   title: text("title").notNull(),
-  completed: boolean("completed").default(false).notNull(),
-  assignedTo: text("assigned_to").notNull().$type<'all' | 'admin' | 'manager' | 'seller' | 'user'>(), // 'user' means specific user
-  assignedToId: varchar("assigned_to_id").references(() => users.id), // Only used if assignedTo = 'user'
-  createdBy: varchar("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completed: integer("completed", { mode: 'boolean' }).default(false).notNull(),
+  assignedTo: text("assigned_to").notNull().$type<'all' | 'admin' | 'manager' | 'seller' | 'user'>(),
+  assignedToId: text("assigned_to_id").references(() => users.id),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
 
-// ORDERS TABLE (Unauthenticated customer orders)
-export const orders = pgTable("orders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderCode: varchar("order_code", { length: 8 }).notNull().unique(), // Like "ABC12345"
+// ORDERS TABLE
+export const orders = sqliteTable("orders", {
+  id: text("id").primaryKey().$defaultFn(() => generateId()),
+  orderCode: text("order_code", { length: 8 }).notNull().unique(),
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
-  items: jsonb("items").notNull().$type<Array<{
+  items: text("items", { mode: 'json' }).notNull().$type<Array<{
     productId: string;
     quantity: number;
     priceAtSale: number;
   }>>(),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  total: text("total").notNull(),
   status: text("status").notNull().$type<'pending' | 'approved' | 'cancelled'>().default('pending'),
   paymentMethod: text("payment_method").notNull().$type<'cash' | 'transfer'>(),
-  paymentProof: text("payment_proof"), // URL to uploaded proof for transfers
-  approvedBy: varchar("approved_by").references(() => users.id), // UserId when approved
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  approvedAt: timestamp("approved_at"),
+  paymentProof: text("payment_proof"),
+  approvedBy: text("approved_by").references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
+  approvedAt: integer("approved_at", { mode: 'timestamp' }),
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, orderCode: true, status: true, approvedBy: true, createdAt: true, approvedAt: true });
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 
-// ORDER REOPENS TRACKING (para rastrear reabertas de pedidos aprovados - máximo 5/dia para não-admin)
-export const orderReopens = pgTable("order_reopens", {
-  id: serial("id").primaryKey(),
-  orderId: varchar("order_id").notNull().references(() => orders.id),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  date: text("date").notNull(), // Format: YYYY-MM-DD
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+// ORDER REOPENS TRACKING
+export const orderReopens = sqliteTable("order_reopens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderId: text("order_id").notNull().references(() => orders.id),
+  userId: text("user_id").notNull().references(() => users.id),
+  date: text("date").notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertOrderReopenSchema = createInsertSchema(orderReopens).omit({ id: true, createdAt: true });

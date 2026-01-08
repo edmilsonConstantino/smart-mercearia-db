@@ -65,9 +65,10 @@ export async function setupVite(app: Express, server: Server) {
 // DEBUG - apenas em desenvolvimento
 console.log("\n🔧 Configuração do servidor (DESENVOLVIMENTO):");
 console.log(`   HOST: ${process.env.HOST || "localhost"}`);
-console.log(`   PORT: ${process.env.PORT || "9001"}`);
+console.log(`   PORT: ${process.env.PORT || "3000"}`);
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);
-console.log(`   DATABASE_URL: ${process.env.DATABASE_URL ? "✅ configurada" : "❌ NÃO DEFINIDA"}`);
+console.log(`   DATABASE_PATH: ${process.env.DATABASE_PATH || "./data/database.sqlite"}`);
+console.log(`   SQLite: ${fs.existsSync(process.env.DATABASE_PATH || "./data/database.sqlite") ? "✅ arquivo existe" : "⚠️  será criado"}`);
 console.log("");
 
 (async () => {

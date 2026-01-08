@@ -12,15 +12,8 @@ if (result.error) {
   console.log('✅ Variáveis de ambiente carregadas do .env');
 }
 
-// Validar variáveis essenciais
-const requiredEnvVars = ['DATABASE_URL'];
-const missing = requiredEnvVars.filter(key => !process.env[key]);
-
-if (missing.length > 0) {
-  console.error('❌ ERRO: Variáveis de ambiente obrigatórias não definidas:');
-  missing.forEach(key => console.error(`   - ${key}`));
-  console.error('\n💡 Certifique-se de que o arquivo .env existe e contém essas variáveis\n');
-  process.exit(1);
-}
+// SQLite não requer validação de variáveis obrigatórias
+// DATABASE_PATH tem valor padrão: './data/database.sqlite'
+// Se não estiver definido, será criado automaticamente
 
 export {};

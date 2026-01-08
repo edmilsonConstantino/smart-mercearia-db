@@ -26,7 +26,7 @@ export default async function runApp(
   setup: (app: Express, server: Server) => Promise<void>,
 ) {
   const host = process.env.HOST || "localhost";
-  const port = Number(process.env.PORT || 9001);
+  const port = Number(process.env.PORT || 3000);
 
   let server: Server;
 
@@ -34,10 +34,9 @@ export default async function runApp(
      PHASE 1 — Bootstrap (fail-fast)
   ======================================================= */
   try {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL environment variable is required");
-    }
-
+    // SQLite não requer verificação de DATABASE_URL
+    // DATABASE_PATH tem valor padrão em db/index.ts
+    
     log("Initializing database...");
     await initializeDatabase();
     log("Database initialization complete");
@@ -82,10 +81,10 @@ export default async function runApp(
       log("Running setup (Vite / Static)...");
       await setup(app, server);
 
-const { markAppReady } = await import("./app");
-markAppReady();
+      const { markAppReady } = await import("./app");
+      markAppReady();
 
-log("✅ Application ready");
+      log("✅ Application ready");
 
     } catch (err) {
       console.error("❌ ERROR: Setup failed");
