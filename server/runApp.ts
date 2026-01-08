@@ -25,7 +25,11 @@ export default async function runApp(
   app: Express,
   setup: (app: Express, server: Server) => Promise<void>,
 ) {
-  const host = process.env.HOST || "localhost";
+  // 🔧 FIX: Usar 0.0.0.0 em produção para Render
+  const host = process.env.NODE_ENV === 'production' 
+    ? '0.0.0.0' 
+    : (process.env.HOST || 'localhost');
+    
   const port = Number(process.env.PORT || 3000);
 
   let server: Server;
@@ -72,7 +76,13 @@ export default async function runApp(
   server.listen(port, host, async () => {
     log(`✓ Server listening on ${host}:${port}`);
     log(`Environment: ${process.env.NODE_ENV || "development"}`);
-    log(`Access at: http://${host}:${port}`);
+    
+    // Mostrar URL pública em produção
+    if (process.env.NODE_ENV === 'production') {
+      log(`🌐 Public URL: https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'your-app.onrender.com'}`);
+    } else {
+      log(`Access at: http://${host}:${port}`);
+    }
 
     /* =====================================================
        PHASE 3 — Setup (Vite ou Static)
