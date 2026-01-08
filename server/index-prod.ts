@@ -1,5 +1,8 @@
-// NÃO carregar .env em produção - usar variáveis de ambiente do Render
+// NÃO carregar .env em produção - usar variáveis de ambiente do sistema
 if (process.env.NODE_ENV !== 'production') {
+  await import("../env");
+} else {
+  // Importar env.ts mesmo em produção para definir defaults
   await import("../env");
 }
 
@@ -17,20 +20,21 @@ console.log('\n🔍 Verificando variáveis de ambiente (PRODUÇÃO)...');
 console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`   PORT: ${process.env.PORT || 'não definida'}`);
 
-if (!process.env.DATABASE_URL) {
-  console.error('❌ ERRO CRÍTICO: DATABASE_URL não está definida!');
-  console.error('   Configure a variável de ambiente no Render Dashboard');
-  process.exit(1);
+// Para SQLite, verificar DATABASE_PATH
+const dbPath = process.env.DATABASE_PATH || './data/database.sqlite';
+console.log(`   DATABASE_PATH: ${dbPath}`);
+
+// Criar diretório se não existir
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  console.log(`   📁 Criando diretório: ${dbDir}`);
+  fs.mkdirSync(dbDir, { recursive: true });
 }
 
-// Mostrar hostname da DATABASE_URL (sem senha)
-try {
-  const dbUrl = new URL(process.env.DATABASE_URL);
-  console.log(`   DATABASE_URL host: ${dbUrl.hostname}`);
-  console.log(`   DATABASE_URL database: ${dbUrl.pathname.slice(1)}`);
-} catch (error) {
-  console.error('❌ DATABASE_URL inválida:', error);
-  process.exit(1);
+if (fs.existsSync(dbPath)) {
+  console.log(`   ✅ SQLite database encontrado`);
+} else {
+  console.log(`   ⚠️  SQLite database será criado em: ${dbPath}`);
 }
 
 console.log('✅ Variáveis de ambiente OK\n');
